@@ -1,0 +1,21 @@
+# Local agent state and credentials
+.pi/
+.claude/settings.local.json
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Temporary files (spikes, experiments)
+tmp/
+temp/
+*.log
+
+# OS and editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Stack-specific ignores are added during the kickoff
