@@ -1,6 +1,6 @@
 # AGENTS.md
 
-> **Template not initialized.** This project was created from `agile-project-template` and has not been kicked off yet. The only allowed work is `TEC-001 — Kickoff` (run the `kickoff` skill). Remove this notice during the kickoff.
+> **Template not initialized.** This project was created from `agile-project-template` and has not been kicked off yet. The only item that may be started is `TEC-001 — Kickoff` (run the `kickoff` skill); its initial backlog planning takes place on `main` before starting the item branch. Remove this notice during the kickoff.
 
 ## 0. Process
 

@@ -12,8 +12,8 @@ Read `docs/PROCESS.md` and `AGENTS.md` first. Every rule there applies.
 ## 1. Preconditions
 
 - `AGENTS.md` still contains the "Template not initialized" notice and `TEC-001` is `Todo` in `BACKLOG.md`. If not, stop and tell the user the project has already been kicked off.
-- The working tree is clean.
-- Start the item following the `start-task` procedure: branch `task/TEC-001-kickoff` from up-to-date `main` (skip `git pull` if there is no remote or no upstream yet), `TEC-001` → `In Progress`, `STATUS.md` updated, commit `chore(TEC-001): start kickoff`.
+- The current branch is `main` and the working tree is clean. If not, stop and ask the user to resolve the state without switching branches or discarding changes.
+- If `main` has an upstream, run `git pull --ff-only` before planning; stop if it fails. Do not start the item branch until the initial items have been added on `main`.
 
 ## 2. Interview
 
@@ -31,7 +31,14 @@ Interview the user until you are aligned. Ask in short rounds of related questio
 
 Before writing, summarize the understanding in a few bullets and get the user's confirmation.
 
-## 3. Write the documents
+## 3. Plan the initial backlog on main
+
+- Agree on the initial epics, version scope and item list. Use the project language selected in the interview even though `AGENTS.md` is not filled yet.
+- Add each new item on `main` using `add-item`: record its requirements first and include its related epics, design and status updates in that item's single commit. Add other requirements alongside their respective items so that in-scope requirements remain covered. Keep the template notice until kickoff is completed. Do not create multiple items in one commit or start their implementation.
+- Include all items needed for the agreed initial requirements, including `TEC-002` for the scaffold and any required spikes. Confirm scope changes with the user. If the plan changes later on the kickoff branch, preserve that work and return to a clean `main` with the user's agreement before using `add-item` again.
+- Once planning is committed and `main` is clean, start `TEC-001` following `start-task`: create `task/TEC-001-kickoff`, mark it `In Progress`, update `STATUS.md` and commit the transition.
+
+## 4. Write the documents
 
 Write in the project language, keeping structural tokens in English (`docs/PROCESS.md` §2).
 
@@ -41,7 +48,7 @@ Write in the project language, keeping structural tokens in English (`docs/PROCE
 4. `BACKLOG.md`:
    - replace `<project-name>` and the goal of v0.1.0;
    - define the epics (thematic containers, usually 3–8);
-   - add the items of v0.1.0 with type, priority, dependencies, requirements or design references and verifiable acceptance criteria. Usually the next item is `TEC-002 — Scaffold and quality gate`; add spikes for unknowns before the items that depend on them;
+   - refine the items already added on `main` with type, priority, dependencies, requirements or design references and verifiable acceptance criteria; do not create new items on the kickoff branch;
    - every functional requirement in scope must be covered by at least one item;
    - fill `Dependencies and suggested order` and the `Unassigned backlog`.
 5. `README.md` — replace the template description with a short presentation of the project (what it is, status, prerequisites and commands once they exist). No process rules.
@@ -49,7 +56,7 @@ Write in the project language, keeping structural tokens in English (`docs/PROCE
 7. `.gitignore` — add the ignores of the chosen stack, keeping the existing ones.
 8. Remove from the repository anything that only describes the template and is no longer true.
 
-## 4. Close
+## 5. Close
 
 Follow the `finish-task` procedure for `TEC-001`: verify acceptance criteria, mark `Done` with `Outcome`, recompute `STATUS.md` (phase, counts, next ready items), check consistency, commit `docs(TEC-001): <description in project language>`.
 

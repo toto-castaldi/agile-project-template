@@ -16,7 +16,7 @@ Template repository for projects developed with coding agents (pi, Claude Code) 
    - pi: `/skill:kickoff`
    - Claude Code: `/kickoff`
 
-   The agent interviews you and fills requirements, technical design, backlog, status and `AGENTS.md` in branch `task/TEC-001-kickoff`.
+   The agent interviews you, plans each initial backlog item on `main` in its own commit, and then completes the project documentation in branch `task/TEC-001-kickoff`.
 3. Review the result and ask the agent to merge it (`merge-task`).
 
 ## What's inside
@@ -41,7 +41,7 @@ docs/spikes/               spike reports
 | Skill | When |
 | --- | --- |
 | `kickoff` | Initialize a new project (`TEC-001`) |
-| `add-item` | New user story, task, spike or bug; requirement or scope change |
+| `add-item` | Add one new user story, task, spike or bug on `main` |
 | `start-task` | Start an item: branch from `main`, `In Progress` |
 | `finish-task` | Verify the Definition of Done and complete the item in its branch |
 | `merge-task` | Merge into `main` (only on explicit request) |
@@ -51,7 +51,8 @@ docs/spikes/               spike reports
 
 - Item types: User Story `US-NNN`, Task `TEC-NNN`, Spike `SPIKE-NNN`, Bug `BUG-NNN`, grouped by thematic epics `EPIC-NNN`.
 - States: `Todo`, `In Progress`, `Blocked`, `Done`. Priorities: `P0`, `P1`, `P2`. No sprints, no estimates.
-- Branches: `us/`, `task/`, `spike/`, `fix/`, `backlog/`, `release/`. Merge `--no-ff` only on request.
+- Add each new backlog item directly on a clean, up-to-date `main` in one documentation-only commit; no branch, merge or automatic push for the addition.
+- Develop items on `us/`, `task/`, `spike/` or `fix/` branches; use `backlog/` for other grooming and `release/` for releases. Merge `--no-ff` only on request.
 - Commits: `type(ID): description` in the project language.
 - Rules and structural labels in English; project content in the project language.
 

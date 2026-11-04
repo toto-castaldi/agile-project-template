@@ -22,7 +22,7 @@ Rules: `docs/PROCESS.md` §7, §8 and the quality gate and DoD additions in `AGE
    - requirements, technical design, ADRs, configuration examples, README updated where needed;
    - for spikes: report in `docs/spikes/` answers every question, index updated.
 
-If anything is not satisfied, the item is **not** `Done`: report what is missing and either keep working, or with the user's agreement mark it `Blocked` or split it into a new item (via `add-item`).
+If anything is not satisfied, the item is **not** `Done`: report what is missing and either keep working, or with the user's agreement mark it `Blocked` or split it into a new item. To add that item, preserve the current work and ask the user to return to a clean `main` before using `add-item`.
 
 ## 3. Update records
 

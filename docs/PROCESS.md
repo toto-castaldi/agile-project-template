@@ -1,6 +1,6 @@
 # Development Process
 
-**Process version:** 1.0.0
+**Process version:** 1.1.0
 
 This document defines the simplified Scrum process shared by every project created from `agile-project-template`. It is project-agnostic and must stay identical across projects, so that improvements made in the template can be copied over unchanged. Project-specific rules (stack, domain, quality gate commands, language) live in `AGENTS.md`.
 
@@ -10,7 +10,7 @@ If `AGENTS.md` needs to deviate from this process, it must do so explicitly in a
 
 - Work is driven by versioned documents, not by conversations. What is not written in the repository does not exist.
 - Requirements (*what*) come before design (*how*), and design comes before implementation.
-- Each unit of work is small, traceable to requirements, done in its own branch and closed only when its Definition of Done is met.
+- Each item is small, traceable to requirements, developed in its own branch and closed only when its Definition of Done is met. Adding an item to the backlog is a separate documentation-only operation on `main` (§6.1).
 - Documentation evolves incrementally with the work: a complete up-front design is not required.
 - The agent never silently resolves inconsistencies: it reports the conflict, proposes an alignment and updates documents accordingly.
 - No Sprints and no time estimates. Planning is expressed through versions, priorities and dependencies.
@@ -150,12 +150,14 @@ Priority orders the work inside a version; it does not decide whether an item be
 
 ### 6.1 Branches
 
-- `main` is always releasable and only receives merges. Never commit work directly on `main`.
+- `main` is always releasable. It receives merges and, as the only exception for direct commits, documentation-only additions of new backlog items as described below.
 - Every item is developed in its own branch created from an up-to-date `main`. Do not mix multiple backlog items in one branch.
 - Branch name: `<prefix><ID>-<short-slug>`, slug in lowercase kebab-case, in the project language. Examples: `us/US-004-create-single-lesson`, `task/TEC-002-scaffold`, `spike/SPIKE-001-payment-provider`, `fix/BUG-003-timezone-offset`.
 - Release branches: `release/vX.Y.Z` (see §9).
-- Backlog grooming (adding or changing requirements, items, epics or version scope without implementing anything) is done in a `backlog/<short-slug>` branch and merged like an item branch. Commit type `docs`, scope the ID of the main item touched (e.g. `docs(US-014): aggiungi esportazione CSV`).
-- If work on an item reveals a new item that it strictly needs, the new item may be added in the current branch; otherwise use a grooming branch.
+- Adding a new item of any type starts only on `main`, with a clean working tree and an up-to-date branch. If the current branch is not `main` or the working tree is dirty, stop and ask the user to resolve that state; do not switch branches, stash or discard changes automatically. When an upstream exists, update `main` with `git pull --ff-only` before making changes.
+- Each item addition is documentation-only and uses exactly one `docs(<ID>)` commit directly on `main`, containing the new item and all related requirements, design and status updates. Do not include unrelated changes or implementation. No branch or merge is created for the addition; do not push unless the user explicitly requests it.
+- If an item branch reveals a new dependency, do not add that item there: preserve the current work and ask the user to return to a clean `main` before starting the addition.
+- Other backlog grooming (changing requirements, existing items, epics or version scope without adding an item or implementing anything) remains in a `backlog/<short-slug>` branch and is merged like an item branch. Commit type `docs`, scope the ID of the main item touched (e.g. `docs(US-014): aggiorna i criteri di accettazione`).
 
 Starting an item:
 
@@ -190,7 +192,7 @@ Commits must not contain secrets, credentials or local agent state.
 
 ### 6.3 Merge
 
-- Merging into `main` is **never automatic**. When an item is complete, the agent leaves the work committed in the item branch and waits for an explicit user request before merging or pushing to `main`.
+- Merging into `main` is **never automatic**. When an item is complete, the agent leaves the work committed in the item branch and waits for an explicit user request before merging or pushing to `main`. Adding an item directly on `main` (§6.1) needs no merge and is not pushed automatically.
 - Merges use `git merge --no-ff` with message `merge(<ID>): <item title>`.
 - After a successful merge and push, delete the local and remote item branch, after verifying the branch is actually merged. Never delete unmerged branches.
 

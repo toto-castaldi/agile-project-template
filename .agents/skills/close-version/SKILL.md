@@ -23,7 +23,7 @@ git switch -c release/vX.Y.Z
 ```
 
 1. `CHANGELOG.md`: rename `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD`, remove empty subsections, add a new empty `[Unreleased]` section on top.
-2. `BACKLOG.md`: version `State: Closed (YYYY-MM-DD)`. Ask the user whether to open the next version now: if yes, add its section with `State: Open`, its goal and the items moved from the unassigned backlog (requirements first, as in `add-item`).
+2. `BACKLOG.md`: version `State: Closed (YYYY-MM-DD)`. Ask the user whether to open the next version now: if yes, add its section with `State: Open` and its goal. Existing fully defined items may be moved; do not create new items on the release branch. Promote unassigned ideas to items later on `main` using `add-item`.
 3. `docs/REQUIREMENTS.md` / `docs/TECHNICAL-DESIGN.md`: update the target version only if the next version is opened.
 4. `STATUS.md`: add the version to `Closed versions` with date and tag, set the current version (or "none open"), recompute counts and next ready items.
 5. Commit: `release(vX.Y.Z): <short description in the project language>`.
@@ -39,4 +39,4 @@ git push origin vX.Y.Z
 git branch -d release/vX.Y.Z
 ```
 
-Skip pushes if there is no remote. Report: tag, merge commit, CHANGELOG section, next version state.
+Skip pushes if there is no remote. Report: tag, merge commit, CHANGELOG section, next version state. If the user wants to turn unassigned ideas into items, do so afterward on clean `main` using `add-item`, one commit per item.
