@@ -30,13 +30,13 @@ For a `Blocked` item being resumed, switch to its existing branch and rebase or 
 ## 3. Update backlog and status
 
 1. In `BACKLOG.md`: `Status: In Progress`, add the `Branch` field; remove `Blocked by` when resuming.
-2. In `STATUS.md`: last update date, counts, `In progress` table (item, epic, title, branch), remove the item from `Next ready items` / `Blocked`, update the version phase if it changed.
+2. In `STATUS.md`: last update date, counts, `In progress` table (item, epic, title, branch and module ID when assigned), remove the item from `Next ready items` / `Blocked`, update the version phase if it changed.
 3. Check that counts in `STATUS.md` match `BACKLOG.md`.
 4. Commit both files together: `chore(<ID>): <"start item" in the project language>`.
 
 ## 4. Prepare the work
 
-1. Read the requirements and design sections referenced by the item.
+1. Read the requirements and design sections referenced by the item and, if assigned, its module entry in `docs/TECHNICAL-DESIGN.md` §3.
 2. Summarize to the user: goal, acceptance criteria, planned approach, open questions.
 3. If the user asked to implement the item, proceed; otherwise stop here.
 

@@ -31,9 +31,9 @@ None.
 
 ## Next ready items
 
-| Priority | Item    | Epic                            | Title   |
-| -------- | ------- | ------------------------------- | ------- |
-| P0       | TEC-001 | EPIC-001 — Project foundation   | Kickoff |
+| Priority | Item    | Epic                          | Module | Title   |
+| -------- | ------- | ----------------------------- | ------ | ------- |
+| P0       | TEC-001 | EPIC-001 — Project foundation | —      | Kickoff |
 
 ## Closed versions
 

@@ -7,6 +7,7 @@
 - `STATUS.md` is updated together with this file at every item or version transition.
 - States: `Todo`, `In Progress`, `Blocked`, `Done`.
 - Priorities: **P0** foundations/invariants, **P1** core functionality, **P2** completion and polish.
+- Items may have an optional `Module` referring to a module in `docs/TECHNICAL-DESIGN.md` §3; modules are independent of epics.
 - No Sprints, no time estimates.
 
 ## Version v0.1.0

@@ -1,6 +1,8 @@
 # Development Process
 
-**Process version:** 1.1.0
+Maintenance of the canonical template repository itself is outside this project workflow. It may be committed directly to main and pushed when explicitly requested.
+
+**Process version:** 1.2.0
 
 This document defines the simplified Scrum process shared by every project created from `agile-project-template`. It is project-agnostic and must stay identical across projects, so that improvements made in the template can be copied over unchanged. Project-specific rules (stack, domain, quality gate commands, language) live in `AGENTS.md`.
 
@@ -43,6 +45,7 @@ Rules:
 - `BACKLOG.md` is the canonical source for items, dependencies and acceptance criteria. `STATUS.md` is derived from it and must always be consistent with it.
 - A requirement change is recorded first in `docs/REQUIREMENTS.md`, then reflected in `BACKLOG.md` and, if needed, in `docs/TECHNICAL-DESIGN.md`.
 - Design choices are recorded in `docs/TECHNICAL-DESIGN.md` together with the item that introduces them.
+- Projects may define modules in `docs/TECHNICAL-DESIGN.md` §3. A module is a named part of the project, independent of epics and versions; it does not imply a Git submodule or a separate repository. Document each module's stable ID (`MOD-001`), name and responsibility, and its location or boundaries when known. IDs are sequential and never reused. Projects without modules need no module catalog.
 
 ## 4. Backlog model
 
@@ -83,6 +86,7 @@ Every item is written in `BACKLOG.md` under its epic, inside the version section
 #### US-001 — Title in project language
 
 - **Epic:** EPIC-001 — Epic title
+- **Module:** MOD-001 — Module name              (optional)
 - **Type:** User Story · **Priority:** P1 · **Status:** Todo
 - **Branch:** `us/US-001-short-slug`            (set when the item starts)
 - **Dependencies:** none | US-000, TEC-000
@@ -108,6 +112,7 @@ Bug items additionally contain:
 Field rules:
 
 - `Epic` is mandatory and contains ID and title.
+- `Module` is optional for every item type. When present, it identifies one module from `docs/TECHNICAL-DESIGN.md` §3 by ID and name. Omit it for unassigned or cross-cutting work; do not invent a module. The epic and module are independent classifications.
 - Every User Story and Bug references at least one requirement. Purely technical items reference the design sections they produce or change, or the process sections (`PROCESS §N`) they touch.
 - Acceptance criteria are concrete and verifiable. Avoid vague wording such as "works well".
 
@@ -143,7 +148,7 @@ Priority orders the work inside a version; it does not decide whether an item be
 ### 5.2 Technical design
 
 - Sections of `docs/TECHNICAL-DESIGN.md` are numbered (`§1`, `§2`, …) so backlog items can reference them.
-- Before designing or implementing an item, read its linked requirements and design sections.
+- Before designing or implementing an item, read its linked requirements and design sections; if it has a `Module`, also read that module's entry in §3.
 - Use an ADR (`docs/adr/ADR-NNN-slug.md`, see `docs/adr/_TEMPLATE.md`) for decisions with relevant alternatives or long-term consequences that would bloat the design document.
 
 ## 6. Git workflow
@@ -210,13 +215,13 @@ Commits must not contain secrets, credentials or local agent state.
 - closed versions with closing date and tag;
 - short notes: at most a few lines of cross-cutting information. Per-item details belong in the item's `Outcome` field, not here.
 
-Epics in `STATUS.md` only classify items: no epic states or progress.
+When a displayed item has a `Module`, include its module ID in that entry; use `—` for items without one when a module column is present. Epics and modules in `STATUS.md` only classify items: no epic or module states or progress.
 
 ### Automatic updates
 
 The agent updates `STATUS.md` together with `BACKLOG.md`, without waiting for a request, whenever an item starts, gets blocked, resumes, is completed or reopened, when the scope of a version changes and when a version is closed.
 
-- The update happens in the same branch and in the same commit as the event that causes it.
+- The update happens in the same branch and in the same commit as the event that causes it. If an item's module assignment changes, update any displayed entry in `STATUS.md` in the same commit.
 - Before completing an item, verify that counts and states in `STATUS.md` match `BACKLOG.md`. If they don't, report the inconsistency and align both files.
 
 ## 8. Definition of Done
