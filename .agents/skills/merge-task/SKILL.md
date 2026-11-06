@@ -33,7 +33,7 @@ Conflicts:
 
 ## 3. Verify and publish
 
-1. Run the quality gate from `AGENTS.md` §6 on `main`. If it fails, do not push: report and ask the user how to proceed.
+1. Run the closing quality gate from `AGENTS.md` §6 on `main` before push: lint, typecheck, build and in-memory unit tests only. Integration and end-to-end suites are separate evidence gathered during the item when needed, not part of the merge or push gate. If the gate fails, do not push: report and ask the user how to proceed.
 2. `git push origin main` (if a remote exists).
 
 ## 4. Clean up

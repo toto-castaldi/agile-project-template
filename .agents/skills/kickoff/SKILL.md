@@ -25,7 +25,7 @@ Interview the user until you are aligned. Ask in short rounds of related questio
 4. **Domain** — glossary terms, business rules and invariants that must never be violated.
 5. **Non-functional** — reproducibility, security, privacy, performance, reliability, observability, anything mandatory.
 6. **Technology** — language/runtime, frameworks, storage, integrations, architecture style and module boundaries, local runtime, deploy expectations (if any). Ask whether the project needs named modules for classifying items; if so, agree their IDs, names, responsibilities and known locations or boundaries. They need not be Git submodules.
-7. **Quality gate** — commands for install, lint, typecheck, test, build (they may not exist yet: record the intended commands and let the scaffold item create them); expected test levels.
+7. **Quality gate** — commands for preparation, lint, typecheck, in-memory unit tests and build (they may not exist yet: record the intended commands and let the scaffold item create them); separate integration and end-to-end commands, prerequisites and when to run them.
 8. **Unknowns and risks** — anything to verify before designing: each becomes a `SPIKE-NNN`.
 9. **Future** — ideas explicitly not in v0.1.0, for the unassigned backlog.
 

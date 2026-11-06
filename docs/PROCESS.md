@@ -2,7 +2,7 @@
 
 Maintenance of the canonical template repository itself is outside this project workflow. It may be committed directly to main and pushed when explicitly requested.
 
-**Process version:** 1.2.0
+**Process version:** 1.3.0
 
 This document defines the simplified Scrum process shared by every project created from `agile-project-template`. It is project-agnostic and must stay identical across projects, so that improvements made in the template can be copied over unchanged. Project-specific rules (stack, domain, quality gate commands, language) live in `AGENTS.md`.
 
@@ -198,6 +198,7 @@ Commits must not contain secrets, credentials or local agent state.
 ### 6.3 Merge
 
 - Merging into `main` is **never automatic**. When an item is complete, the agent leaves the work committed in the item branch and waits for an explicit user request before merging or pushing to `main`. Adding an item directly on `main` (§6.1) needs no merge and is not pushed automatically.
+- The merge and push closing gate runs only lint, typecheck, build and in-memory unit tests as specified in `AGENTS.md`; integration and end-to-end evidence is gathered separately when needed.
 - Merges use `git merge --no-ff` with message `merge(<ID>): <item title>`.
 - After a successful merge and push, delete the local and remote item branch, after verifying the branch is actually merged. Never delete unmerged branches.
 
@@ -229,8 +230,8 @@ The agent updates `STATUS.md` together with `BACKLOG.md`, without waiting for a 
 An item is `Done` only when:
 
 1. all acceptance criteria are satisfied;
-2. the project quality gate defined in `AGENTS.md` passes (tests, lint, typecheck, build, as applicable);
-3. new behavior is covered by tests at the cheapest level that proves it, and bugs have a regression test;
+2. the closing quality gate defined in `AGENTS.md` passes: lint, typecheck, build and in-memory unit tests only, without test-created processes, filesystem, git, network or Docker; dependency installation and compilation are preparation, not test behavior;
+3. new behavior is covered by tests at the cheapest level that proves it, and bugs have a regression test; integration and end-to-end tests are run separately during the item whenever needed to prove its acceptance criteria or project-specific requirements;
 4. no secrets are present in files, commits or logs;
 5. requirements, technical design, ADRs, configuration examples and README are updated where needed;
 6. a line describing the change is added under `[Unreleased]` in `CHANGELOG.md` for user-visible changes;
@@ -246,7 +247,7 @@ A version can be closed only on explicit user request and only when:
 
 - every item assigned to it is `Done`;
 - the release acceptance criteria in `docs/REQUIREMENTS.md` are satisfied;
-- the quality gate passes on an up-to-date `main`.
+- the closing quality gate passes on an up-to-date `main`, and all separately defined integration suites pass; end-to-end evidence requiring external services and credentials is verified separately as required by release acceptance.
 
 Procedure:
 

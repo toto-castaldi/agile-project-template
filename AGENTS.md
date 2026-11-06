@@ -48,23 +48,26 @@ Architecture and module boundaries: `<short description, details in TECHNICAL-DE
 
 ## 6. Quality gate
 
-The quality gate used by the Definition of Done:
+The closing gate for items, merges and pushes to `main` runs only:
 
 ```bash
-<install command>
 <lint command>
 <typecheck command>
-<test command>
+<in-memory unit test command>
 <build command>
 ```
 
-Test guidelines: `<which test levels are expected (unit, integration, end-to-end) and any rule such as "do not mock the database to claim constraints are verified">`.
+Prepare dependencies separately using `<install command>`. Unit tests run in memory without test-created processes, filesystem, git, network or Docker; dependency installation and compilation are preparation, not test behavior.
+
+Run integration and end-to-end suites separately during an item when needed to prove acceptance criteria or project-specific DoD. Run all integration suites at version closure and in CI; evaluate end-to-end evidence requiring external services or credentials separately as required by release acceptance.
+
+Separate test commands and guidelines: `<integration and end-to-end commands, prerequisites, and any rule such as "do not mock the database to claim constraints are verified">`.
 
 ## 7. Definition of Done additions
 
 In addition to `docs/PROCESS.md` §8:
 
-- `<e.g. migrations are reproducible from a clean environment>`
+- `<e.g. migrations are reproducible from a clean environment and verified during the item against a real database>`
 - `<e.g. .env.example is updated when configuration changes>`
 
 ## 8. Process overrides

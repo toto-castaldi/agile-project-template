@@ -15,7 +15,7 @@ Rules: `docs/PROCESS.md` §7, §8 and the quality gate and DoD additions in `AGE
 ## 2. Verify
 
 1. For every acceptance criterion, collect concrete evidence (test names, command output, manual verification performed). List any criterion that is not satisfied.
-2. Run the full quality gate from `AGENTS.md` §6. Report failures with their output; do not hide or skip them.
+2. Run the closing quality gate from `AGENTS.md` §6: lint, typecheck, build and in-memory unit tests only. Install dependencies beforehand if needed. Run integration and end-to-end suites separately during the item whenever needed to prove acceptance criteria or project-specific DoD; they are not part of the closing gate. Report failures with their output; do not hide or skip required evidence.
 3. Walk through the Definition of Done (`docs/PROCESS.md` §8 and `AGENTS.md` §7):
    - tests at the right level, regression test for bugs;
    - no secrets in files, commits or logs;

@@ -14,7 +14,7 @@ Rules: `docs/PROCESS.md` §4.1, §9. Run only because the user explicitly asked.
 2. Every item assigned to the version is `Done` in `BACKLOG.md`. List any that are not and stop.
 3. No item branch of this version is still unmerged (`git branch -a --no-merged main`). Report any and stop.
 4. Walk through the release acceptance criteria in `docs/REQUIREMENTS.md` §7: for each, give evidence. Stop if any is not met, unless the user explicitly decides otherwise (record that decision in `STATUS.md` notes).
-5. Run the quality gate from `AGENTS.md` §6 on `main`. Stop if it fails.
+5. Run the closing quality gate from `AGENTS.md` §6 on `main` (lint, typecheck, build and in-memory unit tests only), and separately run all integration suites listed there. Verify external-service end-to-end evidence separately as required by release acceptance. Stop if any required check fails.
 
 ## 2. Release branch
 
