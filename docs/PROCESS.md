@@ -1,6 +1,6 @@
 # Development Process
 
-**Process version:** 1.3.0
+**Process version:** 1.4.0
 
 This document defines the simplified Scrum process shared by every project created from `agile-project-template`. It is project-agnostic and must stay identical across projects, so that improvements made in the template can be copied over unchanged. Project-specific rules (stack, domain, quality gate commands, language) live in `AGENTS.md`.
 
