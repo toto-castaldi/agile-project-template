@@ -27,7 +27,7 @@ git switch -c release/vX.Y.Z
 1. `CHANGELOG.md`: rename `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD`, remove empty subsections, add a new empty `[Unreleased]` section on top.
 2. `BACKLOG.md`: version `State: Closed (YYYY-MM-DD)`. Ask the user whether to open the next version now: if yes, add its section with `State: Open` and its goal. Existing fully defined items may be moved; do not create new items on the release branch. Promote unassigned ideas to items later on `main` using `add-item`.
 3. `docs/REQUIREMENTS.md` / `docs/TECHNICAL-DESIGN.md`: update the target version only if the next version is opened.
-4. `STATUS.md`: add the version to `Closed versions` with date and tag, set the current version (or "none open"), recompute counts and next ready items.
+4. `STATUS.md`: add the version to `Closed versions` with date and tag, set the current version (or "none open"), recompute counts and next ready items. If a version is current, count its item states mechanically and check them against `STATUS.md` (`docs/PROCESS.md` §7).
 5. Commit: `release(vX.Y.Z): <short description in the project language>`.
 
 ## 3. Merge, tag, publish

@@ -259,7 +259,13 @@ When a displayed item has a `Module`, include its module ID in that entry; use `
 The agent updates `STATUS.md` together with `BACKLOG.md`, without waiting for a request, whenever an item starts, gets blocked, resumes, is completed or reopened, when the scope of a version changes and when a version is closed.
 
 - The update happens in the same branch and in the same commit as the event that causes it. Its date comes from the system clock (§4.4). If an item's module assignment changes, update any displayed entry in `STATUS.md` in the same commit.
-- Before completing an item, verify that counts and states in `STATUS.md` match `BACKLOG.md`. If they don't, report the inconsistency and align both files.
+- After every update of `STATUS.md`, count the item states mechanically in `BACKLOG.md`, in the section of the version shown as current in `STATUS.md` only, replacing `vX.Y.Z`:
+
+  ```bash
+  awk '/^## Version vX.Y.Z/{f=1;next} /^## /{f=0} f' BACKLOG.md | grep -o 'Status:\*\* [A-Za-z ]*' | sort | uniq -c
+  ```
+
+  Every number must match the item-state table of `STATUS.md` (a state with no items counts 0), and the `Done` number and the total must match the progress (`done/total` and percentage). Updating the progress line alone is not enough: the state table must change too. Also check that `In progress`, `Blocked` and `Next ready items` list exactly the items in those states. If anything differs, report the inconsistency and align both files.
 
 ## 8. Definition of Done
 
