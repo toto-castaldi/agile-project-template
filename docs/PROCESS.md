@@ -1,7 +1,5 @@
 # Development Process
 
-Maintenance of the canonical template repository itself is outside this project workflow. It may be committed directly to main and pushed when explicitly requested.
-
 **Process version:** 1.3.0
 
 This document defines the simplified Scrum process shared by every project created from `agile-project-template`. It is project-agnostic and must stay identical across projects, so that improvements made in the template can be copied over unchanged. Project-specific rules (stack, domain, quality gate commands, language) live in `AGENTS.md`.
