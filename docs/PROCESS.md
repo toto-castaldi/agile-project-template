@@ -198,6 +198,7 @@ Commits must not contain secrets, credentials or local agent state.
 - Merging into `main` is **never automatic**. When an item is complete, the agent leaves the work committed in the item branch and waits for an explicit user request before merging or pushing to `main`. Adding an item directly on `main` (§6.1) needs no merge and is not pushed automatically.
 - The merge and push closing gate runs only lint, typecheck, build and in-memory unit tests as specified in `AGENTS.md`; integration and end-to-end evidence is gathered separately when needed.
 - Merges use `git merge --no-ff` with message `merge(<ID>): <item title>`.
+- A merge conflict in `STATUS.md` is never resolved by hand or by picking a side: regenerate `STATUS.md` from the merged `BACKLOG.md` (§7). In `BACKLOG.md` keep both sides' changes, each item with its own most recent state.
 - After a successful merge and push, delete the local and remote item branch, after verifying the branch is actually merged. Never delete unmerged branches.
 
 ### 6.4 Shared claims
@@ -210,6 +211,27 @@ Optional rule for agents working in parallel in separate clones or directories. 
 - If a push fails, keep the local commit, report that the claim is not shared, and do not start or continue the implementation until the user decides.
 - The claim ends when the merged branch is deleted from the remote (§6.3).
 - `STATUS.md` on `main` still reflects only merged state; the cross-clone view comes from the item branches themselves.
+
+### 6.5 Parallel work
+
+Optional mode in which one agent, the orchestrator, runs several items at the same time through worker agents in separate clones. It is on only when `AGENTS.md` §10 sets `Parallel work` to `on`; when the setting is absent or has any other value, it is off and this subsection does not apply. It requires shared claims (§6.4): the pushed item branches are how the orchestrator sees progress. If `Shared claims` is not `on` or there is no `origin` remote, report it and do not start workers.
+
+- **Roles:**
+  - the **orchestrator** works in the main clone, always on a clean `main`. It selects, launches and follows workers, merges and cleans up. It never implements items;
+  - each **worker** handles exactly one item, in its own clone.
+- **Workspaces:**
+  - one `git clone` from `origin` per item, in `<Workspace root>/<ID>/`. `Workspace root` comes from `AGENTS.md` §10; default `../<repo-name>-work`, relative to the main clone;
+  - a fresh clone must be workable as it is. There is no setup hook: the worker prepares whatever the project documents (for example the install command in `AGENTS.md` §6).
+- **Selection:** the orchestrator proposes ready items (`Todo`, all dependencies `Done`) that have no local or remote branch yet. Ready items never depend on each other; the orchestrator also points out items likely to touch the same files or module. The user chooses which items to launch and how many. There is no fixed limit.
+- **Workers:**
+  - each worker runs the `start-task` … `finish-task` procedure in its clone and pushes the item branch on every state change (§6.4);
+  - workers never merge, never push `main`, never remove clones and never start other agents;
+  - they report `done` or `blocked`, with one line of detail, to the orchestrator.
+- **Merge:**
+  - only the orchestrator merges, in the main clone, one item at a time and only on explicit user request (§6.3 unchanged);
+  - a conflict in `STATUS.md` is resolved by regenerating it from the merged `BACKLOG.md` (§6.3). Any other conflict that is not trivially resolvable is reported to the user.
+- **Cleanup:** after a verified merge and the deletion of the item branch, the orchestrator ends the worker's agent and removes its clone. It never removes a clone that has uncommitted changes or commits not contained in a remote branch; it reports such a clone to the user instead.
+- The worker agent command comes from `AGENTS.md` §10 (`Worker agent command`, default `pi`). How agents are started and followed is tooling (the `orchestrate` skill) and does not change these rules.
 
 ## 7. STATUS.md
 
@@ -287,6 +309,7 @@ The repository provides skills in `.agents/skills/` (exposed to Claude Code thro
 | `finish-task` | Verify the Definition of Done and complete an item in its branch |
 | `merge-task` | Merge a completed item into `main` (explicit request only) |
 | `close-version` | Close a version (explicit request only) |
+| `orchestrate` | Run items in parallel through worker agents in separate clones (explicit request only, §6.5) |
 
 Skills are shortcuts: the rules are in this document and in `AGENTS.md`, and they apply even when work is requested in natural language.
 

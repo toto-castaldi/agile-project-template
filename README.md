@@ -47,6 +47,7 @@ docs/spikes/               spike reports
 | `finish-task` | Verify the Definition of Done and complete the item in its branch |
 | `merge-task` | Merge into `main` (only on explicit request) |
 | `close-version` | Close a version with CHANGELOG and tag (only on explicit request) |
+| `orchestrate` | Run items in parallel through worker agents in separate clones (only on explicit request, with `Parallel work` on) |
 
 ## Backlog overlay in pi
 
@@ -76,6 +77,7 @@ docs/spikes/               spike reports
 - Add each new backlog item directly on a clean, up-to-date `main` in one documentation-only commit; no branch, merge or automatic push for the addition.
 - Develop items on `us/`, `task/`, `spike/` or `fix/` branches; use `backlog/` for other grooming and `release/` for releases. Merge `--no-ff` only on request.
 - Optional shared claims (`AGENTS.md` §10): for agents working in parallel clones, item branches are pushed at every state change and an item that already has a branch is not started again. `main` is still never pushed automatically.
+- Optional parallel work (`AGENTS.md` §10, requires shared claims): an orchestrator agent on `main` launches one worker agent per item, each in its own clone, follows their reports, merges on request and removes merged clones. It uses Herdr (`hc`) when available, otherwise it prints the commands to start the workers.
 - Commits: `type(ID): description` in the project language.
 - Rules and structural labels in English; project content in the project language.
 
@@ -83,4 +85,4 @@ Full rules: [`docs/PROCESS.md`](docs/PROCESS.md).
 
 ## Updating the process in existing projects
 
-`docs/PROCESS.md` and `.agents/skills/` are project-agnostic. To bring process improvements from the template into an existing project, copy them over in a `task/` item and check the `Process version` at the top of `docs/PROCESS.md`. The pi extensions in `.pi/extensions/` are project-agnostic too and can be copied the same way, together with the `.pi/*` / `!.pi/extensions/` rules of `.gitignore`. Projects that use modules can then document them in `docs/TECHNICAL-DESIGN.md` §3 and assign them to items; existing projects without modules need no module catalog. To adopt shared claims, add `## 10. Parallel work` with `` - **Shared claims:** `on` `` to the project's `AGENTS.md`; without that section they stay off.
+`docs/PROCESS.md` and `.agents/skills/` are project-agnostic. To bring process improvements from the template into an existing project, copy them over in a `task/` item and check the `Process version` at the top of `docs/PROCESS.md`. The pi extensions in `.pi/extensions/` are project-agnostic too and can be copied the same way, together with the `.pi/*` / `!.pi/extensions/` rules of `.gitignore`. Projects that use modules can then document them in `docs/TECHNICAL-DESIGN.md` §3 and assign them to items; existing projects without modules need no module catalog. To adopt shared claims, add `## 10. Parallel work` with `` - **Shared claims:** `on` `` to the project's `AGENTS.md`; without that section they stay off. To adopt parallel work as well, add `` - **Parallel work:** `on` `` (and optionally `Workspace root` and `Worker agent command`) to the same section; without it, parallel work stays off.

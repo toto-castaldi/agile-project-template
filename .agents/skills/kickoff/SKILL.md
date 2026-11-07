@@ -26,7 +26,7 @@ Interview the user until you are aligned. Ask in short rounds of related questio
 5. **Non-functional** — reproducibility, security, privacy, performance, reliability, observability, anything mandatory.
 6. **Technology** — language/runtime, frameworks, storage, integrations, architecture style and module boundaries, local runtime, deploy expectations (if any). Ask whether the project needs named modules for classifying items; if so, agree their IDs, names, responsibilities and known locations or boundaries. They need not be Git submodules.
 7. **Quality gate** — commands for preparation, lint, typecheck, in-memory unit tests and build (they may not exist yet: record the intended commands and let the scaffold item create them); separate integration and end-to-end commands, prerequisites and when to run them.
-8. **Parallel work** — whether several agents will work at the same time in separate clones or directories. If so, recommend shared claims `on` (`docs/PROCESS.md` §6.4: item branches are pushed at every state change; requires an `origin` remote); otherwise `off`.
+8. **Parallel work** — whether several agents will work at the same time in separate clones or directories. If so, recommend shared claims `on` (`docs/PROCESS.md` §6.4: item branches are pushed at every state change; requires an `origin` remote); otherwise `off`. With shared claims `on`, ask whether one orchestrator agent should launch and follow the workers (`Parallel work` `on`, `docs/PROCESS.md` §6.5; otherwise `off`) and, if so, confirm or change `Workspace root` (default `../<repo-name>-work`) and `Worker agent command` (default `pi`).
 9. **Unknowns and risks** — anything to verify before designing: each becomes a `SPIKE-NNN`.
 10. **Future** — ideas explicitly not in v0.1.0, for the unassigned backlog.
 
@@ -45,7 +45,7 @@ Write in the project language, keeping structural tokens in English (`docs/PROCE
 
 1. `docs/REQUIREMENTS.md` — goal, actors, glossary, scope in/out, functional areas and requirements with stable IDs (`REQ-<AREA>-NNN`), non-functional requirements (`REQ-NFR-NNN`), release acceptance of v0.1.0. State: `baseline`.
 2. `docs/TECHNICAL-DESIGN.md` — initial architectural decisions with rationale, context, modules, conceptual data model if known, and the open decisions with the items that will close them. Preserve any module catalog recorded during planning and complete it as agreed; if the project has no named modules, no catalog is required. Leave sections not yet known short and explicit ("defined by TEC-00N").
-3. `AGENTS.md` — fill every section, including `Shared claims` in §10 (`on` or `off` from the interview), remove all `<placeholders>` and the "Template not initialized" notice. Keep it short: only project-specific rules.
+3. `AGENTS.md` — fill every section, including §10 (`Shared claims` and `Parallel work` `on` or `off` from the interview, `Workspace root` with the repository name, `Worker agent command`), remove all `<placeholders>` and the "Template not initialized" notice. Keep it short: only project-specific rules.
 4. `BACKLOG.md`:
    - replace `<project-name>` and the goal of v0.1.0;
    - define the epics (thematic containers, usually 3–8);

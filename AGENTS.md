@@ -83,5 +83,10 @@ None.
 ## 10. Parallel work
 
 - **Shared claims:** `<on | off>`
+- **Parallel work:** `<on | off>`
+- **Workspace root:** `../<repo-name>-work`
+- **Worker agent command:** `pi`
 
-With `on`, item branches are pushed at every state change so that agents in other clones see which items are taken (`docs/PROCESS.md` §6.4). Requires an `origin` remote.
+With `Shared claims` `on`, item branches are pushed at every state change so that agents in other clones see which items are taken (`docs/PROCESS.md` §6.4). Requires an `origin` remote.
+
+With `Parallel work` `on`, the `orchestrate` skill runs several items at once: one worker agent per item, started with `Worker agent command` in its own clone under `Workspace root` (`docs/PROCESS.md` §6.5). Requires `Shared claims` `on`.
