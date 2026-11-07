@@ -79,3 +79,9 @@ None.
 - Never commit secrets. Local configuration lives in `<e.g. .env>`, with a committed `<e.g. .env.example>` containing no real secrets.
 - Do not log tokens, credentials or sensitive personal data.
 - `<project-specific security rules>`
+
+## 10. Parallel work
+
+- **Shared claims:** `<on | off>`
+
+With `on`, item branches are pushed at every state change so that agents in other clones see which items are taken (`docs/PROCESS.md` §6.4). Requires an `origin` remote.

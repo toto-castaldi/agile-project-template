@@ -75,6 +75,7 @@ docs/spikes/               spike reports
 - States: `Todo`, `In Progress`, `Blocked`, `Done`. Priorities: `P0`, `P1`, `P2`. No sprints, no estimates.
 - Add each new backlog item directly on a clean, up-to-date `main` in one documentation-only commit; no branch, merge or automatic push for the addition.
 - Develop items on `us/`, `task/`, `spike/` or `fix/` branches; use `backlog/` for other grooming and `release/` for releases. Merge `--no-ff` only on request.
+- Optional shared claims (`AGENTS.md` §10): for agents working in parallel clones, item branches are pushed at every state change and an item that already has a branch is not started again. `main` is still never pushed automatically.
 - Commits: `type(ID): description` in the project language.
 - Rules and structural labels in English; project content in the project language.
 
@@ -82,4 +83,4 @@ Full rules: [`docs/PROCESS.md`](docs/PROCESS.md).
 
 ## Updating the process in existing projects
 
-`docs/PROCESS.md` and `.agents/skills/` are project-agnostic. To bring process improvements from the template into an existing project, copy them over in a `task/` item and check the `Process version` at the top of `docs/PROCESS.md`. The pi extensions in `.pi/extensions/` are project-agnostic too and can be copied the same way, together with the `.pi/*` / `!.pi/extensions/` rules of `.gitignore`. Projects that use modules can then document them in `docs/TECHNICAL-DESIGN.md` §3 and assign them to items; existing projects without modules need no module catalog.
+`docs/PROCESS.md` and `.agents/skills/` are project-agnostic. To bring process improvements from the template into an existing project, copy them over in a `task/` item and check the `Process version` at the top of `docs/PROCESS.md`. The pi extensions in `.pi/extensions/` are project-agnostic too and can be copied the same way, together with the `.pi/*` / `!.pi/extensions/` rules of `.gitignore`. Projects that use modules can then document them in `docs/TECHNICAL-DESIGN.md` §3 and assign them to items; existing projects without modules need no module catalog. To adopt shared claims, add `## 10. Parallel work` with `` - **Shared claims:** `on` `` to the project's `AGENTS.md`; without that section they stay off.

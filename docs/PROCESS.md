@@ -200,6 +200,17 @@ Commits must not contain secrets, credentials or local agent state.
 - Merges use `git merge --no-ff` with message `merge(<ID>): <item title>`.
 - After a successful merge and push, delete the local and remote item branch, after verifying the branch is actually merged. Never delete unmerged branches.
 
+### 6.4 Shared claims
+
+Optional rule for agents working in parallel in separate clones or directories. It is on only when `AGENTS.md` §10 sets `Shared claims` to `on`; when the setting is absent or has any other value, it is off and this subsection does not apply. With shared claims on, the item branch itself is the claim: once pushed, it is visible to every clone.
+
+- Shared claims require an `origin` remote. Without one, report that claims cannot be shared and continue as with shared claims off.
+- Before starting a `Todo` item, run `git fetch --prune origin` and check that no local or remote branch exists for the same ID (any branch named `<prefix><ID>-…`). If one exists, stop and report the branch, the date and the author of its last commit. Continue only if the user explicitly asks, and then switch to that branch instead of creating a new one. If the fetch fails, report it and ask before starting.
+- Push the **item branch** right after every commit that changes the item's state in that branch: start (`In Progress`), `Blocked`, resume and `Done`. Use `git push -u origin <branch>` for the first push. `main` is never pushed automatically: §6.3 does not change.
+- If a push fails, keep the local commit, report that the claim is not shared, and do not start or continue the implementation until the user decides.
+- The claim ends when the merged branch is deleted from the remote (§6.3).
+- `STATUS.md` on `main` still reflects only merged state; the cross-clone view comes from the item branches themselves.
+
 ## 7. STATUS.md
 
 `STATUS.md` is the short snapshot the agent reads first. It contains at least:

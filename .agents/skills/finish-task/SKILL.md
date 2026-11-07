@@ -22,7 +22,7 @@ Rules: `docs/PROCESS.md` §7, §8 and the quality gate and DoD additions in `AGE
    - requirements, technical design, ADRs, configuration examples, README updated where needed;
    - for spikes: report in `docs/spikes/` answers every question, index updated.
 
-If anything is not satisfied, the item is **not** `Done`: report what is missing and either keep working, or with the user's agreement mark it `Blocked` or split it into a new item. To add that item, preserve the current work and ask the user to return to a clean `main` before using `add-item`.
+If anything is not satisfied, the item is **not** `Done`: report what is missing and either keep working, or with the user's agreement mark it `Blocked` (with shared claims on, push the item branch after that commit, as in step 4) or split it into a new item. To add that item, preserve the current work and ask the user to return to a clean `main` before using `add-item`.
 
 ## 3. Update records
 
@@ -35,4 +35,6 @@ If anything is not satisfied, the item is **not** `Done`: report what is missing
 
 Commit the remaining work and the record updates in the item branch with a Conventional Commit in the project language, e.g. `feat(US-004): <description>`. Make sure the working tree is clean afterwards.
 
-Do **not** merge or push to `main`. Report to the user: summary, evidence per acceptance criterion, quality gate result, branch name, and that `merge-task` can be run on their request.
+With shared claims on (`docs/PROCESS.md` §6.4: `AGENTS.md` §10 sets `Shared claims` to `on` and an `origin` remote exists), push the item branch: `git push -u origin <branch>`. If the push fails, keep the commit and report that the `Done` state is not shared.
+
+Do **not** merge or push to `main`. Report to the user: summary, evidence per acceptance criterion, quality gate result, branch name, the push result when shared claims are on, and that `merge-task` can be run on their request.
