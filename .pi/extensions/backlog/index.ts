@@ -16,12 +16,25 @@
  * start as `Type: all · Priority: all · Status: Todo`, are kept in memory for
  * the rest of the pi session and reset when pi restarts or on /reload.
  *
+ * Item branches: BACKLOG.md of the current directory is the base. Each item is
+ * replaced by its copy in the BACKLOG.md of its item branch (`us/`, `task/`,
+ * `spike/`, `fix/` + `<ID>-<slug>`, PROCESS §4.3 and §6.1), local or
+ * remote-tracking, when that branch is not merged into local `main` or into a
+ * remote's default branch. A local branch wins over the remote-tracking one
+ * with the same name. On an item branch, its item keeps the working-tree copy
+ * and the other branches of that ID are skipped. With several branches for
+ * one ID, the one with the most recent commit wins and the header warns
+ * `also in: …`. At every opening the overlay runs `git fetch --prune` (10 s
+ * timeout) in the background and updates when it completes. Only git refs are
+ * read and updated; files of the working tree are never written.
+ *
  * Project-agnostic: it relies only on the structural labels of BACKLOG.md
  * defined in docs/PROCESS.md §4 (`## Version vX.Y.Z`, `**State:**`,
  * `### EPIC-NNN — …`, `#### <ID> — <title>`, `- **Field:** value`).
  * It never writes any file.
  */
 
+import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -35,6 +48,8 @@ import { matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@ea
 
 const BACKLOG_FILE = "BACKLOG.md";
 const DEFAULT_SHORTCUT = "ctrl+shift+b";
+const FETCH_TIMEOUT_MS = 10_000;
+const GIT_TIMEOUT_MS = 5_000;
 
 interface BacklogItem {
 	/** Heading text after `#### `, e.g. `US-001 — Title`. */
@@ -47,7 +62,13 @@ interface BacklogItem {
 	epic?: string;
 	/** Raw Markdown lines of the item body, in file order. */
 	body: string[];
+	/** Ref the item was read from, e.g. `origin/task/TEC-007-slug`; undefined for the current directory. */
+	source?: string;
+	/** Other unmerged branches that also carry the item. */
+	alsoIn?: string[];
 }
+
+type FetchState = "none" | "fetching" | "failed" | "done";
 
 type LoadResult = { items: BacklogItem[] } | { message: string };
 
@@ -168,6 +189,134 @@ function loadBacklog(cwd: string): LoadResult {
 }
 
 // ---------------------------------------------------------------------------
+// Item branches
+// ---------------------------------------------------------------------------
+
+const ITEM_BRANCH = /^(?:us|task|spike|fix)\/([A-Za-z]+-\d+)(?:-|$)/;
+
+function itemId(item: BacklogItem): string | undefined {
+	return /^([A-Za-z]+-\d+)\b/.exec(item.heading)?.[1]?.toUpperCase();
+}
+
+/** Run git without prompts; resolves with stdout, or null on any failure (no git, not a repo, timeout). */
+function git(cwd: string, args: string[], timeout = GIT_TIMEOUT_MS): Promise<string | null> {
+	return new Promise((resolve) => {
+		try {
+			execFile(
+				"git",
+				args,
+				{
+					cwd,
+					timeout,
+					maxBuffer: 32 * 1024 * 1024,
+					env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+				},
+				(error, stdout) => resolve(error ? null : stdout),
+			);
+		} catch {
+			resolve(null);
+		}
+	});
+}
+
+const splitLines = (out: string | null) => (out ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+
+/** Remotes of the repository, or null outside a git repository (or without git). */
+async function gitRemotes(cwd: string): Promise<string[] | null> {
+	if ((await git(cwd, ["rev-parse", "--is-inside-work-tree"]))?.trim() !== "true") return null;
+	return splitLines(await git(cwd, ["remote"]));
+}
+
+/** Refs an item branch counts as merged into: local `main` and each remote's default branch. */
+async function mergeTargets(cwd: string, remotes: string[]): Promise<string[]> {
+	const targets: string[] = [];
+	const exists = async (ref: string) => (await git(cwd, ["rev-parse", "--verify", "--quiet", ref])) !== null;
+	if (await exists("refs/heads/main")) targets.push("refs/heads/main");
+	for (const remote of remotes) {
+		const head = (await git(cwd, ["symbolic-ref", "--quiet", `refs/remotes/${remote}/HEAD`]))?.trim();
+		if (head) targets.push(head);
+		else if (await exists(`refs/remotes/${remote}/main`)) targets.push(`refs/remotes/${remote}/main`);
+	}
+	return targets;
+}
+
+interface Candidate {
+	/** Short ref name, e.g. `task/TEC-007-slug` or `origin/task/TEC-007-slug`. */
+	ref: string;
+	time: number;
+}
+
+/** Unmerged item branches grouped by item ID, most recent commit first. */
+async function itemBranches(cwd: string, remotes: string[]): Promise<Map<string, Candidate[]>> {
+	const roots = ["refs/heads", "refs/remotes"];
+	const current = (await git(cwd, ["symbolic-ref", "--quiet", "--short", "HEAD"]))?.trim();
+	const merged = new Set<string>();
+	for (const target of await mergeTargets(cwd, remotes)) {
+		for (const ref of splitLines(await git(cwd, ["for-each-ref", "--format=%(refname)", `--merged=${target}`, ...roots]))) {
+			merged.add(ref);
+		}
+	}
+
+	// Branch name → chosen candidate (local wins over remote-tracking).
+	const byName = new Map<string, Candidate & { local: boolean }>();
+	const refs = splitLines(await git(cwd, ["for-each-ref", "--format=%(refname)%09%(committerdate:unix)", ...roots]));
+	for (const entry of refs) {
+		const [full, time] = entry.split("\t");
+		if (!full || merged.has(full)) continue;
+		let name: string;
+		let local: boolean;
+		if (full.startsWith("refs/heads/")) {
+			name = full.slice("refs/heads/".length);
+			local = true;
+		} else {
+			const rest = full.slice("refs/remotes/".length);
+			const remote = remotes.find((r) => rest.startsWith(`${r}/`));
+			if (!remote) continue;
+			name = rest.slice(remote.length + 1);
+			local = false;
+		}
+		if (!ITEM_BRANCH.test(name)) continue;
+		const ref = local ? name : full.slice("refs/remotes/".length);
+		const known = byName.get(name);
+		if (known && (known.local || !local)) continue;
+		byName.set(name, { ref, time: Number(time) || 0, local });
+	}
+
+	// On an item branch, the working tree is the freshest copy of that item: skip every branch of its ID.
+	const currentId = current ? ITEM_BRANCH.exec(current)?.[1]?.toUpperCase() : undefined;
+	const byId = new Map<string, Candidate[]>();
+	for (const [name, candidate] of byName) {
+		const id = ITEM_BRANCH.exec(name)![1]!.toUpperCase();
+		if (id === currentId) continue;
+		const list = byId.get(id) ?? [];
+		list.push({ ref: candidate.ref, time: candidate.time });
+		byId.set(id, list);
+	}
+	for (const list of byId.values()) list.sort((a, b) => b.time - a.time);
+	return byId;
+}
+
+/** Base items with each one replaced by its copy from its unmerged item branch, when there is one. */
+async function resolveFromBranches(cwd: string, remotes: string[], base: BacklogItem[]): Promise<BacklogItem[]> {
+	const ids = new Set(base.map(itemId).filter((id): id is string => id !== undefined));
+	const branches = await itemBranches(cwd, remotes);
+	const resolved = new Map<string, BacklogItem>();
+	for (const [id, candidates] of branches) {
+		if (!ids.has(id)) continue;
+		for (const candidate of candidates) {
+			// `<ref>:./BACKLOG.md` is relative to the current directory, like loadBacklog.
+			const text = await git(cwd, ["show", `${candidate.ref}:./${BACKLOG_FILE}`]);
+			const item = text === null ? undefined : parseBacklog(text).find((i) => itemId(i) === id);
+			if (!item) continue;
+			const alsoIn = candidates.filter((c) => c !== candidate).map((c) => c.ref);
+			resolved.set(id, { ...item, source: candidate.ref, alsoIn: alsoIn.length > 0 ? alsoIn : undefined });
+			break;
+		}
+	}
+	return base.map((item) => resolved.get(itemId(item) ?? "") ?? item);
+}
+
+// ---------------------------------------------------------------------------
 // Styling
 // ---------------------------------------------------------------------------
 
@@ -247,11 +396,12 @@ class BacklogOverlay {
 	private index = 0;
 	private scroll = 0;
 	private bodyHeight = 10;
+	private fetchState: FetchState = "none";
 	private cachedWidth?: number;
 	private cachedLines?: string[];
 
 	constructor(
-		private readonly load: LoadResult,
+		private load: LoadResult,
 		/** Shared with the extension, so changes survive closing and reopening the overlay. */
 		private readonly filters: Filters,
 		private readonly theme: Theme,
@@ -262,8 +412,22 @@ class BacklogOverlay {
 		this.applyFilters();
 	}
 
+	/** Replace the items (same base, states resolved from item branches), keeping the current item and filters. */
+	setItems(items: BacklogItem[]): void {
+		this.load = { items };
+		this.applyFilters(true);
+		this.invalidate();
+		this.requestRender();
+	}
+
+	setFetchState(state: FetchState): void {
+		this.fetchState = state;
+		this.invalidate();
+		this.requestRender();
+	}
+
 	/** Recompute the matching items; stay on the current item if it still matches, else go to the first. */
-	private applyFilters(): void {
+	private applyFilters(keepScroll = false): void {
 		if (!("items" in this.load)) return;
 		const current = this.matching[this.index];
 		this.matching = [];
@@ -272,7 +436,7 @@ class BacklogOverlay {
 		});
 		const kept = current === undefined ? -1 : this.matching.indexOf(current);
 		this.index = kept >= 0 ? kept : 0;
-		this.scroll = 0;
+		if (!(keepScroll && kept >= 0)) this.scroll = 0;
 	}
 
 	/** Cycle a filter on t/T, p/P, s/S; returns true if the key was a filter key. */
@@ -367,7 +531,15 @@ class BacklogOverlay {
 		}
 
 		const items = this.load.items;
-		const filterLine = th.fg("muted", describeFilters(this.filters));
+		const fetchNotice =
+			this.fetchState === "fetching"
+				? th.fg("dim", "fetching…")
+				: this.fetchState === "failed"
+					? th.fg("warning", "fetch failed: showing last known state")
+					: "";
+		const filterLine = [th.fg("muted", describeFilters(this.filters)), fetchNotice]
+			.filter(Boolean)
+			.join(th.fg("dim", " · "));
 		const help = th.fg("dim", "←/→ item · t/p/s filter · PgUp/PgDn scroll · Esc/q close");
 
 		if (this.matching.length === 0) {
@@ -397,12 +569,18 @@ class BacklogOverlay {
 		const header = [position, th.fg("muted", version), th.fg("muted", item.epic ?? "no epic")].join(
 			th.fg("dim", " · "),
 		);
+		const origin: string[] = [];
+		if (item.source) {
+			const from = th.fg("accent", `from ${item.source}`);
+			const also = item.alsoIn ? th.fg("warning", `also in: ${item.alsoIn.join(", ")}`) : "";
+			origin.push(...wrapTextWithAnsi([from, also].filter(Boolean).join(th.fg("dim", " · ")), textW));
+		}
 		const title = wrapTextWithAnsi(th.bold(styleInline(th, item.heading)), textW);
 
 		const body: string[] = [];
 		for (const l of item.body) body.push(...renderBodyLine(th, l, textW));
 
-		const fixed = 2 /* borders */ + 2 /* header, filters */ + 1 /* separator */ + title.length + 1 /* blank */ + 1 /* separator */ + 1 /* help */;
+		const fixed = 2 /* borders */ + 2 /* header, filters */ + origin.length + 1 /* separator */ + title.length + 1 /* blank */ + 1 /* separator */ + 1 /* help */;
 		this.bodyHeight = Math.max(3, totalHeight - fixed);
 		const maxScroll = Math.max(0, body.length - this.bodyHeight);
 		if (this.scroll > maxScroll) this.scroll = maxScroll;
@@ -412,6 +590,7 @@ class BacklogOverlay {
 		lines.push(rule("╭", "╮", "Backlog"));
 		lines.push(row(` ${header}`));
 		lines.push(row(` ${filterLine}`));
+		for (const l of origin) lines.push(row(` ${l}`));
 		lines.push(rule("├", "┤"));
 		for (const l of title) lines.push(row(` ${l}`));
 		lines.push(row(""));
@@ -469,6 +648,39 @@ function resolveShortcut(cwd: string): ShortcutSetting {
 	};
 }
 
+/**
+ * Background update of an open overlay: states from local item branches first,
+ * then again after `git fetch --prune`. Does nothing outside a git repository.
+ */
+async function refreshFromBranches(
+	cwd: string,
+	base: BacklogItem[],
+	overlay: BacklogOverlay,
+	isClosed: () => boolean,
+): Promise<void> {
+	try {
+		const remotes = await gitRemotes(cwd);
+		if (remotes === null || isClosed()) return;
+		const fetch = remotes.length > 0 ? git(cwd, ["fetch", "--prune", "--quiet"], FETCH_TIMEOUT_MS) : null;
+		if (fetch) overlay.setFetchState("fetching");
+		const local = await resolveFromBranches(cwd, remotes, base);
+		if (!isClosed()) overlay.setItems(local);
+		if (!fetch) return;
+		const fetched = (await fetch) !== null;
+		if (isClosed()) return;
+		if (!fetched) {
+			overlay.setFetchState("failed");
+			return;
+		}
+		const updated = await resolveFromBranches(cwd, remotes, base);
+		if (isClosed()) return;
+		overlay.setItems(updated);
+		overlay.setFetchState("done");
+	} catch {
+		// Never break the overlay: it keeps showing what it has.
+	}
+}
+
 export default function (pi: ExtensionAPI) {
 	let open = false;
 	// In memory only: kept across openings in this pi session, reset on restart or /reload.
@@ -483,17 +695,25 @@ export default function (pi: ExtensionAPI) {
 		open = true;
 		try {
 			// Read the file again at every opening, so the overlay always shows the current backlog.
-			const load = loadBacklog(ctx.cwd);
+			const cwd = ctx.cwd;
+			const load = loadBacklog(cwd);
+			let closed = false;
 			await ctx.ui.custom<void>(
-				(tui, theme, _keybindings, done) =>
-					new BacklogOverlay(
+				(tui, theme, _keybindings, done) => {
+					const overlay = new BacklogOverlay(
 						load,
 						filters,
 						theme,
 						() => tui.terminal.rows,
 						() => tui.requestRender(),
-						() => done(),
-					),
+						() => {
+							closed = true;
+							done();
+						},
+					);
+					if ("items" in load) void refreshFromBranches(cwd, load.items, overlay, () => closed);
+					return overlay;
+				},
 				{
 					overlay: true,
 					overlayOptions: { anchor: "center", width: "80%", minWidth: 50, maxHeight: "90%", margin: 1 },
