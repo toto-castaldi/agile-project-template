@@ -83,7 +83,7 @@ The user may also give the go, or change the plan, directly in the worker's tab:
 
 ## 6. Merge
 
-Merge only on explicit user request, one item at a time, in this clone, following the `merge-task` procedure for the item branch (it fetches the branch from `origin`). A conflict in `STATUS.md` is regenerated from the merged `BACKLOG.md`, never resolved by hand. Any other conflict that is not obvious: abort and report. Then propose the next merge, if any.
+Merge only on explicit user request, one item at a time, in this clone, following the `merge-task` procedure for the item branch (it fetches the branch from `origin`). A conflict in `STATUS.md` is regenerated from the merged `BACKLOG.md`, never resolved by hand. Any other conflict that is not obvious: abort and report. If the item's records on the branch are wrong (for example a date), do not fix them in the merge: ask the worker to fix them with a commit on its branch (`hc send <name> "…"`, with the user's agreement), wait for the push, then merge. Then propose the next merge, if any.
 
 ## 7. Clean up
 

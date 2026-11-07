@@ -13,6 +13,7 @@ Rules: `docs/PROCESS.md` §6.3. Merging is never automatic: run this only becaus
 1. Identify the branch and the item. If the branch exists only on `origin` (for example when another clone pushed it, `docs/PROCESS.md` §6.4–§6.5), run `git fetch --prune origin` and use `git switch <branch>` to create the local tracking branch. For item branches, the item must be `Done` in `BACKLOG.md` **on that branch**. If not, stop and suggest `finish-task`.
 2. The working tree is clean.
 3. Show the user what will be merged (`git log --oneline main..<branch>`) if they have not seen it yet.
+4. Check the item's records on the branch (`Outcome`, dates, `STATUS.md` consistency). If something is wrong, stop before merging: report it and fix it with a commit on the item branch (with parallel work, ask its worker), never inside the merge commit.
 
 ## 2. Merge
 
@@ -29,6 +30,7 @@ Conflicts:
 - In `BACKLOG.md`, keep both sides' changes: each item keeps its own most recent state.
 - In `STATUS.md`, never resolve the conflict by hand or pick a side: regenerate the whole file from the merged `BACKLOG.md` (counts, in progress, blocked, recently completed, next ready items), as required by `docs/PROCESS.md` §6.3. This holds with or without parallel work.
 - In `CHANGELOG.md`, keep all lines from both sides under `[Unreleased]`.
+- Change nothing beyond the conflict resolution.
 - For code conflicts, resolve them only if the resolution is obvious; otherwise abort the merge (`git merge --abort`) and ask the user.
 
 ## 3. Verify and publish

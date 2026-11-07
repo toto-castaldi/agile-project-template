@@ -199,6 +199,7 @@ Commits must not contain secrets, credentials or local agent state.
 - Merging into `main` is **never automatic**. When an item is complete, the agent leaves the work committed in the item branch and waits for an explicit user request before merging or pushing to `main`. Adding an item directly on `main` (§6.1) needs no merge and is not pushed automatically.
 - The merge and push closing gate runs only lint, typecheck, build and in-memory unit tests as specified in `AGENTS.md`; integration and end-to-end evidence is gathered separately when needed.
 - Merges use `git merge --no-ff` with message `merge(<ID>): <item title>`.
+- The merge commit contains only the merge and the resolution of its conflicts. If the branch has an error (a wrong date, an inconsistent record, a failing check), do not fix it in the merge: report it and fix it first with a commit on the item branch (with parallel work, by its worker, §6.5), then merge.
 - A merge conflict in `STATUS.md` is never resolved by hand or by picking a side: regenerate `STATUS.md` from the merged `BACKLOG.md` (§7). In `BACKLOG.md` keep both sides' changes, each item with its own most recent state.
 - After a successful merge and push, delete the local and remote item branch, after verifying the branch is actually merged. Never delete unmerged branches, except when releasing an item that was claimed but never started (§6.5).
 
