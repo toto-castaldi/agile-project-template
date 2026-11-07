@@ -5,8 +5,16 @@
  * settings.json (global or project): `"backlogOverlay": { "shortcut": "alt+b" }`,
  * or disabled with `false`. One item per screen:
  *   ←/→ or ↑/↓  previous / next item (BACKLOG.md order, across epics and versions)
+ *   Home/End    first / last item
+ *   t/T         next / previous Type filter     (all, User Story, Task, Spike, Bug)
+ *   p/P         next / previous Priority filter (all, P0, P1, P2)
+ *   s/S         next / previous Status filter   (all, Todo, In Progress, Blocked, Done)
  *   PgUp/PgDn   scroll the current item
  *   Esc or q    close
+ *
+ * Navigation visits only the items that match all three filters. The filters
+ * start as `Type: all · Priority: all · Status: Todo`, are kept in memory for
+ * the rest of the pi session and reset when pi restarts or on /reload.
  *
  * Project-agnostic: it relies only on the structural labels of BACKLOG.md
  * defined in docs/PROCESS.md §4 (`## Version vX.Y.Z`, `**State:**`,
@@ -42,6 +50,57 @@ interface BacklogItem {
 }
 
 type LoadResult = { items: BacklogItem[] } | { message: string };
+
+// ---------------------------------------------------------------------------
+// Filters (values and order from docs/PROCESS.md §4.3, §4.5, §4.6)
+// ---------------------------------------------------------------------------
+
+const ALL = "all";
+
+const FILTERS = [
+	{ key: "t", field: "Type", values: [ALL, "User Story", "Task", "Spike", "Bug"] },
+	{ key: "p", field: "Priority", values: [ALL, "P0", "P1", "P2"] },
+	{ key: "s", field: "Status", values: [ALL, "Todo", "In Progress", "Blocked", "Done"] },
+] as const;
+
+type FilterField = (typeof FILTERS)[number]["field"];
+type Filters = Record<FilterField, string>;
+
+function defaultFilters(): Filters {
+	return { Type: ALL, Priority: ALL, Status: "Todo" };
+}
+
+/** Value of the first top-level `**Field:** value` of the item, e.g. `Done (see Outcome)`. */
+function fieldValue(item: BacklogItem, field: string): string | undefined {
+	const wanted = field.toLowerCase();
+	for (const line of item.body) {
+		const bullet = /^[-*+]\s+(.*)$/.exec(line);
+		if (!bullet) continue;
+		const text = bullet[1]!;
+		const matches = [...text.matchAll(/\*\*([^*:]+):\*\*\s*/g)];
+		for (let i = 0; i < matches.length; i++) {
+			const m = matches[i]!;
+			if (m[1]!.trim().toLowerCase() !== wanted) continue;
+			const start = m.index! + m[0].length;
+			const end = i + 1 < matches.length ? matches[i + 1]!.index! : text.length;
+			return text.slice(start, end).replace(/\s*·\s*$/, "").trim();
+		}
+	}
+	return undefined;
+}
+
+function matchesFilters(item: BacklogItem, filters: Filters): boolean {
+	return FILTERS.every(({ field }) => {
+		const selected = filters[field];
+		if (selected === ALL) return true;
+		const value = fieldValue(item, field);
+		return value !== undefined && value.toLowerCase().startsWith(selected.toLowerCase());
+	});
+}
+
+function describeFilters(filters: Filters): string {
+	return FILTERS.map(({ field }) => `${field}: ${filters[field]}`).join(" · ");
+}
 
 // ---------------------------------------------------------------------------
 // Parsing
@@ -182,6 +241,9 @@ function renderBodyLine(theme: Theme, line: string, width: number): string[] {
 // ---------------------------------------------------------------------------
 
 class BacklogOverlay {
+	/** Indices into the items of the ones that match the filters, in BACKLOG.md order. */
+	private matching: number[] = [];
+	/** Position inside `matching`. */
 	private index = 0;
 	private scroll = 0;
 	private bodyHeight = 10;
@@ -190,11 +252,45 @@ class BacklogOverlay {
 
 	constructor(
 		private readonly load: LoadResult,
+		/** Shared with the extension, so changes survive closing and reopening the overlay. */
+		private readonly filters: Filters,
 		private readonly theme: Theme,
 		private readonly rows: () => number,
 		private readonly requestRender: () => void,
 		private readonly done: () => void,
-	) {}
+	) {
+		this.applyFilters();
+	}
+
+	/** Recompute the matching items; stay on the current item if it still matches, else go to the first. */
+	private applyFilters(): void {
+		if (!("items" in this.load)) return;
+		const current = this.matching[this.index];
+		this.matching = [];
+		this.load.items.forEach((item, i) => {
+			if (matchesFilters(item, this.filters)) this.matching.push(i);
+		});
+		const kept = current === undefined ? -1 : this.matching.indexOf(current);
+		this.index = kept >= 0 ? kept : 0;
+		this.scroll = 0;
+	}
+
+	/** Cycle a filter on t/T, p/P, s/S; returns true if the key was a filter key. */
+	private cycleFilter(data: string): boolean {
+		// matchesKey covers plain, Kitty CSI-u and modifyOtherKeys encodings of the key and of shift+key.
+		let step = 0;
+		const filter = FILTERS.find((f) => {
+			if (matchesKey(data, f.key)) step = 1;
+			else if (matchesKey(data, `shift+${f.key}`)) step = -1;
+			return step !== 0;
+		});
+		if (!filter) return false;
+		const values: readonly string[] = filter.values;
+		const at = Math.max(0, values.indexOf(this.filters[filter.field]));
+		this.filters[filter.field] = values[(at + step + values.length) % values.length]!;
+		this.applyFilters();
+		return true;
+	}
 
 	invalidate(): void {
 		this.cachedWidth = undefined;
@@ -207,7 +303,13 @@ class BacklogOverlay {
 			return;
 		}
 		if (!("items" in this.load)) return;
-		const count = this.load.items.length;
+		if (this.cycleFilter(data)) {
+			this.invalidate();
+			this.requestRender();
+			return;
+		}
+		const count = this.matching.length;
+		if (count === 0) return;
 		const before = { index: this.index, scroll: this.scroll };
 
 		if (matchesKey(data, "left") || matchesKey(data, "up")) {
@@ -265,10 +367,30 @@ class BacklogOverlay {
 		}
 
 		const items = this.load.items;
-		const item = items[this.index]!;
+		const filterLine = th.fg("muted", describeFilters(this.filters));
+		const help = th.fg("dim", "←/→ item · t/p/s filter · PgUp/PgDn scroll · Esc/q close");
 
-		// Header: position, version with state, epic.
-		const position = th.bold(`${this.index + 1} / ${items.length}`);
+		if (this.matching.length === 0) {
+			lines.push(rule("╭", "╮", "Backlog"));
+			lines.push(row(` ${th.bold(`0 / 0 (${items.length} total)`)}`));
+			lines.push(row(` ${filterLine}`));
+			lines.push(rule("├", "┤"));
+			lines.push(row(""));
+			lines.push(row(" No items match the filters"));
+			const blank = Math.max(0, totalHeight - 9);
+			for (let i = 0; i < blank; i++) lines.push(row(""));
+			lines.push(rule("├", "┤"));
+			lines.push(row(` ${help}`));
+			lines.push(rule("╰", "╯"));
+			this.cachedWidth = width;
+			this.cachedLines = lines;
+			return lines;
+		}
+
+		const item = items[this.matching[this.index]!]!;
+
+		// Header: position in the filtered list, version with state, epic; then the filters.
+		const position = th.bold(`${this.index + 1} / ${this.matching.length} (${items.length} total)`);
 		const version = item.version
 			? item.version + (item.versionState ? ` (${item.versionState})` : "")
 			: "no version";
@@ -280,7 +402,7 @@ class BacklogOverlay {
 		const body: string[] = [];
 		for (const l of item.body) body.push(...renderBodyLine(th, l, textW));
 
-		const fixed = 2 /* borders */ + 1 /* header */ + 1 /* separator */ + title.length + 1 /* blank */ + 1 /* separator */ + 1 /* help */;
+		const fixed = 2 /* borders */ + 2 /* header, filters */ + 1 /* separator */ + title.length + 1 /* blank */ + 1 /* separator */ + 1 /* help */;
 		this.bodyHeight = Math.max(3, totalHeight - fixed);
 		const maxScroll = Math.max(0, body.length - this.bodyHeight);
 		if (this.scroll > maxScroll) this.scroll = maxScroll;
@@ -289,6 +411,7 @@ class BacklogOverlay {
 
 		lines.push(rule("╭", "╮", "Backlog"));
 		lines.push(row(` ${header}`));
+		lines.push(row(` ${filterLine}`));
 		lines.push(rule("├", "┤"));
 		for (const l of title) lines.push(row(` ${l}`));
 		lines.push(row(""));
@@ -298,7 +421,7 @@ class BacklogOverlay {
 				? `lines ${this.scroll + 1}-${Math.min(body.length, this.scroll + this.bodyHeight)} of ${body.length}`
 				: "";
 		lines.push(rule("├", "┤", range));
-		lines.push(row(` ${th.fg("dim", "←/→ item · PgUp/PgDn scroll · Esc/q close")}`));
+		lines.push(row(` ${help}`));
 		lines.push(rule("╰", "╯"));
 
 		this.cachedWidth = width;
@@ -348,6 +471,8 @@ function resolveShortcut(cwd: string): ShortcutSetting {
 
 export default function (pi: ExtensionAPI) {
 	let open = false;
+	// In memory only: kept across openings in this pi session, reset on restart or /reload.
+	const filters = defaultFilters();
 
 	const show = async (ctx: ExtensionContext) => {
 		if (ctx.mode !== "tui") {
@@ -363,6 +488,7 @@ export default function (pi: ExtensionAPI) {
 				(tui, theme, _keybindings, done) =>
 					new BacklogOverlay(
 						load,
+						filters,
 						theme,
 						() => tui.terminal.rows,
 						() => tui.requestRender(),

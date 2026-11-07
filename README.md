@@ -60,7 +60,9 @@ docs/spikes/               spike reports
   ```
 
   Use `false` to disable the shortcut and keep only `/backlog`. Choose a key that `/hotkeys` does not list, or pi warns about the conflict.
-- `←`/`→` (or `↑`/`↓`) move to the previous/next item across epics and versions, `PgUp`/`PgDn` scroll a long item, `Esc` or `q` closes it.
+- `←`/`→` (or `↑`/`↓`) move to the previous/next item across epics and versions, `Home`/`End` to the first/last one, `PgUp`/`PgDn` scroll a long item, `Esc` or `q` closes it.
+- `t`, `p` and `s` cycle the Type (`all`, `User Story`, `Task`, `Spike`, `Bug`), Priority (`all`, `P0`, `P1`, `P2`) and Status (`all`, `Todo`, `In Progress`, `Blocked`, `Done`) filters; `T`, `P` and `S` cycle backwards. Navigation visits only the items that match all three, and the header shows the position among them and the total, for example `2 / 5 (12 total)`.
+- The filters start as `Type: all · Priority: all · Status: Todo` and are kept for the rest of the pi session; restarting pi or running `/reload` resets them. They are never saved to disk.
 - It never modifies files: state changes stay with the skills.
 - pi loads project extensions only after the project is trusted. Projects that do not use pi can delete `.pi/extensions/`.
 
