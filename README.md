@@ -34,6 +34,7 @@ docs/adr/                  architecture decision records
 docs/spikes/               spike reports
 .agents/skills/            process skills (pi reads them natively)
 .claude/skills             symlink to .agents/skills for Claude Code
+.pi/extensions/            pi extensions (backlog overlay)
 ```
 
 ## Skills
@@ -46,6 +47,22 @@ docs/spikes/               spike reports
 | `finish-task` | Verify the Definition of Done and complete the item in its branch |
 | `merge-task` | Merge into `main` (only on explicit request) |
 | `close-version` | Close a version with CHANGELOG and tag (only on explicit request) |
+
+## Backlog overlay in pi
+
+`.pi/extensions/backlog/` adds a read-only overlay that shows the items of `BACKLOG.md` one at a time, without leaving the pi conversation.
+
+- Open it with `ctrl+shift+b`, or with `/backlog` in terminals that do not distinguish `ctrl+shift` combinations.
+- To change the shortcut (for example when it conflicts with the terminal or a multiplexer), set it in pi's `settings.json`, globally (`~/.pi/agent/settings.json`) or per project (`.pi/settings.json`, which overrides the global one), then restart pi or run `/reload`:
+
+  ```json
+  { "backlogOverlay": { "shortcut": "ctrl+alt+b" } }
+  ```
+
+  Use `false` to disable the shortcut and keep only `/backlog`. Choose a key that `/hotkeys` does not list, or pi warns about the conflict.
+- `←`/`→` (or `↑`/`↓`) move to the previous/next item across epics and versions, `PgUp`/`PgDn` scroll a long item, `Esc` or `q` closes it.
+- It never modifies files: state changes stay with the skills.
+- pi loads project extensions only after the project is trusted. Projects that do not use pi can delete `.pi/extensions/`.
 
 ## Process in a nutshell
 
@@ -60,4 +77,4 @@ Full rules: [`docs/PROCESS.md`](docs/PROCESS.md).
 
 ## Updating the process in existing projects
 
-`docs/PROCESS.md` and `.agents/skills/` are project-agnostic. To bring process improvements from the template into an existing project, copy them over in a `task/` item and check the `Process version` at the top of `docs/PROCESS.md`. Projects that use modules can then document them in `docs/TECHNICAL-DESIGN.md` §3 and assign them to items; existing projects without modules need no module catalog.
+`docs/PROCESS.md` and `.agents/skills/` are project-agnostic. To bring process improvements from the template into an existing project, copy them over in a `task/` item and check the `Process version` at the top of `docs/PROCESS.md`. The pi extensions in `.pi/extensions/` are project-agnostic too and can be copied the same way, together with the `.pi/*` / `!.pi/extensions/` rules of `.gitignore`. Projects that use modules can then document them in `docs/TECHNICAL-DESIGN.md` §3 and assign them to items; existing projects without modules need no module catalog.

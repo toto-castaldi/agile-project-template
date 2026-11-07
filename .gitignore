@@ -1,5 +1,6 @@
-# Local agent state and credentials
-.pi/
+# Local agent state and credentials (project pi extensions are tracked)
+.pi/*
+!.pi/extensions/
 .claude/settings.local.json
 
 # Local configuration and secrets

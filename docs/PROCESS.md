@@ -278,3 +278,5 @@ The repository provides skills in `.agents/skills/` (exposed to Claude Code thro
 | `close-version` | Close a version (explicit request only) |
 
 Skills are shortcuts: the rules are in this document and in `AGENTS.md`, and they apply even when work is requested in natural language.
+
+The repository may also ship agent-specific tooling besides skills (for example read-only viewers). Such tooling never changes the rules of this document.
