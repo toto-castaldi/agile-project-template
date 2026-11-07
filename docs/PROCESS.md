@@ -220,11 +220,12 @@ Optional mode in which one agent, the orchestrator, runs several items at the sa
 
 - **Roles:**
   - the **orchestrator** works in the main clone, always on a clean `main`. It selects, launches and follows workers, relays the user's go, merges and cleans up. It never implements items;
+  - the orchestrator does not block while workers run: it follows them through their reports and stays available to the user. Meanwhile it may do backlog work that stays on `main` (adding items, §6.1, or planning items not yet launched), never implementation and never a branch switch. A report that arrives during such work is handled as soon as the current step ends;
   - each **worker** handles exactly one item, in its own clone.
 - **Workspaces:**
   - one `git clone` from `origin` per item, in `<Workspace root>/<ID>/`. `Workspace root` comes from `AGENTS.md` §10; default `../<repo-name>-work`, relative to the main clone;
   - a fresh clone must be workable as it is. There is no setup hook: the worker prepares whatever the project documents (for example the install command in `AGENTS.md` §6).
-- **Selection:** the orchestrator proposes ready items (`Todo`, all dependencies `Done`) that have no local or remote branch yet. Ready items never depend on each other; the orchestrator also points out items likely to touch the same files or module. The user chooses which items to launch and how many. There is no fixed limit.
+- **Selection:** the orchestrator proposes ready items (`Todo`, all dependencies `Done`) that have no local or remote branch yet. Workers clone from `origin`: before launching, `main` must not be ahead of `origin/main`, otherwise the orchestrator asks the user to push it (pushing `main` stays an explicit user request). Ready items never depend on each other; the orchestrator also points out items likely to touch the same files or module. The user chooses which items to launch and how many. There is no fixed limit.
 - **Workers:**
   - a launched worker runs the start of the `start-task` procedure in its clone: it claims the item (branch created and pushed, `In Progress`, §6.4), reads the referenced requirements and design, and reports `ready` to the orchestrator with a short plan (approach, files it will touch, open questions). Then it stops;
   - it implements the item only after an explicit **go** from the user, given directly in the worker or relayed by the orchestrator. Only when the user asks for it at launch may the orchestrator give the go together with the launch;
