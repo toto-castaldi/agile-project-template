@@ -199,7 +199,7 @@ Commits must not contain secrets, credentials or local agent state.
 - The merge and push closing gate runs only lint, typecheck, build and in-memory unit tests as specified in `AGENTS.md`; integration and end-to-end evidence is gathered separately when needed.
 - Merges use `git merge --no-ff` with message `merge(<ID>): <item title>`.
 - A merge conflict in `STATUS.md` is never resolved by hand or by picking a side: regenerate `STATUS.md` from the merged `BACKLOG.md` (§7). In `BACKLOG.md` keep both sides' changes, each item with its own most recent state.
-- After a successful merge and push, delete the local and remote item branch, after verifying the branch is actually merged. Never delete unmerged branches.
+- After a successful merge and push, delete the local and remote item branch, after verifying the branch is actually merged. Never delete unmerged branches, except when releasing an item that was claimed but never started (§6.5).
 
 ### 6.4 Shared claims
 
@@ -217,16 +217,19 @@ Optional rule for agents working in parallel in separate clones or directories. 
 Optional mode in which one agent, the orchestrator, runs several items at the same time through worker agents in separate clones. It is on only when `AGENTS.md` §10 sets `Parallel work` to `on`; when the setting is absent or has any other value, it is off and this subsection does not apply. It requires shared claims (§6.4): the pushed item branches are how the orchestrator sees progress. If `Shared claims` is not `on` or there is no `origin` remote, report it and do not start workers.
 
 - **Roles:**
-  - the **orchestrator** works in the main clone, always on a clean `main`. It selects, launches and follows workers, merges and cleans up. It never implements items;
+  - the **orchestrator** works in the main clone, always on a clean `main`. It selects, launches and follows workers, relays the user's go, merges and cleans up. It never implements items;
   - each **worker** handles exactly one item, in its own clone.
 - **Workspaces:**
   - one `git clone` from `origin` per item, in `<Workspace root>/<ID>/`. `Workspace root` comes from `AGENTS.md` §10; default `../<repo-name>-work`, relative to the main clone;
   - a fresh clone must be workable as it is. There is no setup hook: the worker prepares whatever the project documents (for example the install command in `AGENTS.md` §6).
 - **Selection:** the orchestrator proposes ready items (`Todo`, all dependencies `Done`) that have no local or remote branch yet. Ready items never depend on each other; the orchestrator also points out items likely to touch the same files or module. The user chooses which items to launch and how many. There is no fixed limit.
 - **Workers:**
-  - each worker runs the `start-task` … `finish-task` procedure in its clone and pushes the item branch on every state change (§6.4);
+  - a launched worker runs the start of the `start-task` procedure in its clone: it claims the item (branch created and pushed, `In Progress`, §6.4), reads the referenced requirements and design, and reports `ready` to the orchestrator with a short plan (approach, files it will touch, open questions). Then it stops;
+  - it implements the item only after an explicit **go** from the user, given directly in the worker or relayed by the orchestrator. Only when the user asks for it at launch may the orchestrator give the go together with the launch;
+  - after the go it implements the item and completes it with the `finish-task` procedure, pushing the item branch on every state change (§6.4);
   - workers never merge, never push `main`, never remove clones and never start other agents;
-  - they report `done` or `blocked`, with one line of detail, to the orchestrator.
+  - they report `ready`, `done` or `blocked`, with a short detail, to the orchestrator.
+- **Release:** a claimed item that never received the go can be released on explicit user request, as an exception to §6.3: only if its branch contains nothing but the start commit, the orchestrator ends the worker, deletes the item branch locally and on `origin`, and removes the clone (same checks as the cleanup). On `main` the item is still `Todo`.
 - **Merge:**
   - only the orchestrator merges, in the main clone, one item at a time and only on explicit user request (§6.3 unchanged);
   - a conflict in `STATUS.md` is resolved by regenerating it from the merged `BACKLOG.md` (§6.3). Any other conflict that is not trivially resolvable is reported to the user.

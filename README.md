@@ -77,7 +77,7 @@ docs/spikes/               spike reports
 - Add each new backlog item directly on a clean, up-to-date `main` in one documentation-only commit; no branch, merge or automatic push for the addition.
 - Develop items on `us/`, `task/`, `spike/` or `fix/` branches; use `backlog/` for other grooming and `release/` for releases. Merge `--no-ff` only on request.
 - Optional shared claims (`AGENTS.md` §10): for agents working in parallel clones, item branches are pushed at every state change and an item that already has a branch is not started again. `main` is still never pushed automatically.
-- Optional parallel work (`AGENTS.md` §10, requires shared claims): an orchestrator agent on `main` launches one worker agent per item, each in its own clone, follows their reports, merges on request and removes merged clones. It uses Herdr (`hc`) when available, otherwise it prints the commands to start the workers.
+- Optional parallel work (`AGENTS.md` §10, requires shared claims): an orchestrator agent on `main` launches one worker agent per item, each in its own clone; each worker claims its item, proposes a plan and waits for your go. The orchestrator follows their reports, merges on request and removes merged clones. It uses Herdr (`hc`) when available, otherwise it prints the commands to start the workers.
 - Commits: `type(ID): description` in the project language.
 - Rules and structural labels in English; project content in the project language.
 
