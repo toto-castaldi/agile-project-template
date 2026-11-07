@@ -30,7 +30,7 @@ Ask the user what to do: launch some ready items (which, and how many: there is 
 
 For each item the user chose:
 
-1. Clone: `git clone <origin url> <Workspace root>/<ID>` (origin URL from `git remote get-url origin`). If the folder already exists, stop for that item and report it; never overwrite it.
+1. Clone: `git clone --branch main <origin url> <Workspace root>/<ID>` (origin URL from `git remote get-url origin`). `--branch main` keeps the clone on `main` even when the remote's `HEAD` points elsewhere. If the folder already exists, stop for that item and report it; never overwrite it.
 2. Task for the worker, in the project language for the free text:
 
    ```text
