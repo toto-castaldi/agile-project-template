@@ -38,7 +38,7 @@ For a `Blocked` item being resumed, switch to its existing branch and rebase or 
 ## 3. Update backlog and status
 
 1. In `BACKLOG.md`: `Status: In Progress`, add the `Branch` field; remove `Blocked by` when resuming.
-2. In `STATUS.md`: last update date, counts, `In progress` table (item, epic, title, branch and module ID when assigned), remove the item from `Next ready items` / `Blocked`, update the version phase if it changed.
+2. In `STATUS.md`: last update date (today, from `date +%F`), counts, `In progress` table (item, epic, title, branch and module ID when assigned), remove the item from `Next ready items` / `Blocked`, update the version phase if it changed.
 3. Check that counts in `STATUS.md` match `BACKLOG.md`.
 4. Commit both files together: `chore(<ID>): <"start item" in the project language>`.
 5. With shared claims on, push the item branch at once: `git push -u origin <branch>`. If the push fails, keep the commit, report that the claim is not shared and stop: do not prepare or implement the item until the user decides.

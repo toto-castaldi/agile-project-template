@@ -113,6 +113,7 @@ Field rules:
 - `Module` is optional for every item type. When present, it identifies one module from `docs/TECHNICAL-DESIGN.md` §3 by ID and name. Omit it for unassigned or cross-cutting work; do not invent a module. The epic and module are independent classifications.
 - Every User Story and Bug references at least one requirement. Purely technical items reference the design sections they produce or change, or the process sections (`PROCESS §N`) they touch.
 - Acceptance criteria are concrete and verifiable. Avoid vague wording such as "works well".
+- Dates (`Outcome`, version states, and dates in `STATUS.md` and `CHANGELOG.md`) use `YYYY-MM-DD` and are the current date read from the system clock (`date +%F`) when the record is written. Never estimate or infer a date.
 
 ### 4.5 States
 
@@ -256,7 +257,7 @@ When a displayed item has a `Module`, include its module ID in that entry; use `
 
 The agent updates `STATUS.md` together with `BACKLOG.md`, without waiting for a request, whenever an item starts, gets blocked, resumes, is completed or reopened, when the scope of a version changes and when a version is closed.
 
-- The update happens in the same branch and in the same commit as the event that causes it. If an item's module assignment changes, update any displayed entry in `STATUS.md` in the same commit.
+- The update happens in the same branch and in the same commit as the event that causes it. Its date comes from the system clock (§4.4). If an item's module assignment changes, update any displayed entry in `STATUS.md` in the same commit.
 - Before completing an item, verify that counts and states in `STATUS.md` match `BACKLOG.md`. If they don't, report the inconsistency and align both files.
 
 ## 8. Definition of Done

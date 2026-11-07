@@ -28,7 +28,7 @@ Add one item on `main`; do not create a branch. If the request arose on an item 
 1. **Requirements first**: if behavior or scope changes, add or update the requirement in `docs/REQUIREMENTS.md` with a new stable ID (never reuse IDs; mark removed ones as `Withdrawn`). Update the in/out of scope lists if needed.
 2. **Backlog**: add the item under its epic in the version section with the next free ID of its type and all mandatory fields (`docs/PROCESS.md` §4.4), verifiable acceptance criteria, requirements or design references. Add the optional `Module` field only when a module was agreed; its ID and name must match `docs/TECHNICAL-DESIGN.md` §3. For bugs include `Found in`, `Steps to reproduce`, `Expected`, `Actual` and a regression-test criterion. Update `Dependencies and suggested order` if relevant. Items for the `Unassigned backlog` may be a single line without full fields, but still need a unique stable ID; retain any agreed module association on that line.
 3. **Design**: if a new module was agreed, record its ID, name, responsibility and known location or boundaries in `docs/TECHNICAL-DESIGN.md` §3 in the same commit. If the item opens a design decision, add it to `Open decisions`.
-4. **Status**: update `STATUS.md` (date, progress, counts, next ready items, phase if the scope of the open version changed).
+4. **Status**: update `STATUS.md` (date from `date +%F`, progress, counts, next ready items, phase if the scope of the open version changed).
 5. Check consistency between `STATUS.md` and `BACKLOG.md`.
 
 ## 3. Commit

@@ -18,6 +18,8 @@ Rules: `docs/PROCESS.md` §4.1, §9. Run only because the user explicitly asked.
 
 ## 2. Release branch
 
+Every date written below (`YYYY-MM-DD`) is today's date from `date +%F` (`docs/PROCESS.md` §4.4).
+
 ```bash
 git switch -c release/vX.Y.Z
 ```

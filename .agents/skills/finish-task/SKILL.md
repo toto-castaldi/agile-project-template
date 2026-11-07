@@ -26,8 +26,10 @@ If anything is not satisfied, the item is **not** `Done`: report what is missing
 
 ## 3. Update records
 
+Every date written below is today's date from `date +%F` (`docs/PROCESS.md` §4.4).
+
 1. `CHANGELOG.md`: for user-visible changes, add a line under `[Unreleased]` in the right subsection (`Added`, `Changed`, `Fixed`, `Removed`), in the project language, ending with the item ID.
-2. `BACKLOG.md`: `Status: Done`, `Outcome` with what was delivered and verified and the closing date.
+2. `BACKLOG.md`: `Status: Done`, `Outcome` with what was delivered and verified and the closing date: today's date from `date +%F`, never estimated.
 3. `STATUS.md`: last update date, progress and counts, remove from `In progress`, add on top of `Recently completed` (keep the last 10), recompute `Next ready items` (Todo items whose dependencies are all `Done`, by priority), update phase, keep notes short.
 4. Check that `STATUS.md` is consistent with `BACKLOG.md` (counts, states, module assignments and next ready items). Fix and report any inconsistency.
 
