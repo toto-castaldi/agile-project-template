@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Orchestrate parallel work
 
-Rules: `docs/PROCESS.md` §6.3, §6.4, §6.5 and `AGENTS.md` §10. Run only because the user explicitly asked. You are the **orchestrator**: you stay in the main clone on `main` and never implement items yourself. The user's arguments, if any, name the items to launch.
+Rules: `docs/PROCESS.md` §6.3, §6.4, §6.5 and `AGENTS.md` §10. `backlog` is `python3 .agents/tools/backlog.py`. Run only because the user explicitly asked. You are the **orchestrator**: you stay in the main clone on `main` and never implement items yourself. The user's arguments, if any, name the items to launch.
 
 ## 1. Checks
 
@@ -20,10 +20,10 @@ Rules: `docs/PROCESS.md` §6.3, §6.4, §6.5 and `AGENTS.md` §10. Run only beca
 
 Run `git fetch --prune origin`, then report four lists:
 
-1. **Workers**: every unmerged item branch on `origin` (`git branch -r --no-merged origin/main --list 'origin/us/*' 'origin/task/*' 'origin/spike/*' 'origin/fix/*'`), with the item state read from that branch (`git show origin/<branch>:BACKLOG.md`), the date of its last commit and, in Herdr mode, the worker's agent status (`hc get <name>`, see §3 for names). Flag a clone under `Workspace root` whose branch is not on `origin`, and a worker whose terminal no longer exists.
+1. **Workers**: every unmerged item branch on `origin` (`git branch -r --no-merged origin/main --list 'origin/us/*' 'origin/task/*' 'origin/spike/*' 'origin/fix/*'`), with the item state read from that branch (`backlog show <ID> --branches`, or `backlog status --branches` for all of them), the date of its last commit and, in Herdr mode, the worker's agent status (`hc get <name>`, see §3 for names). Flag a clone under `Workspace root` whose branch is not on `origin`, and a worker whose terminal no longer exists.
 2. **Waiting for the go**: workers whose branch contains only the start commit (`git log --oneline origin/main..origin/<branch>` shows one `chore(<ID>)` commit) and that reported `ready`, each with its plan. If a plan was not received, read it from the worker's screen (`hc read <name> --lines 60`).
 3. **Waiting for a merge**: workers whose item is `Done` on its branch.
-4. **Ready to launch**: items `Todo` in `BACKLOG.md` on `main` whose dependencies are all `Done` and that have no local or remote branch (`git branch -a --list '*/<ID>-*'`), ordered by priority. Point out pairs likely to touch the same files or module.
+4. **Ready to launch**: the items of `backlog ready --limit 0` on `main` that have no local or remote branch (`git branch -a --list '*/<ID>-*'`), in that order. Point out pairs likely to touch the same files or module.
 
 Ask the user what to do: launch some ready items (which, and how many: there is no fixed limit), give the go to waiting workers, merge a finished item, release a claimed item, clean up, or wait for reports.
 
@@ -89,7 +89,7 @@ The user may also give the go, or change the plan, directly in the worker's tab:
 
 ## 6. Merge
 
-Merge only on explicit user request, one item at a time, in this clone, following the `merge-task` procedure for the item branch (it fetches the branch from `origin`). A conflict in `STATUS.md` is regenerated from the merged `BACKLOG.md`, never resolved by hand. Any other conflict that is not obvious: abort and report. If the item's records on the branch are wrong (for example a date), do not fix them in the merge: ask the worker to fix them with a commit on its branch (`hc send <name> "…"`, with the user's agreement), on its report (§4) check the push, then merge. Then propose the next merge, if any.
+Merge only on explicit user request, one item at a time, in this clone, following the `merge-task` procedure for the item branch (it fetches the branch from `origin`). A conflict in `backlog/` is resolved as in `docs/PROCESS.md` §6.3. Any other conflict that is not obvious: abort and report. If the item's records on the branch are wrong (for example a date), do not fix them in the merge: ask the worker to fix them with a commit on its branch (`hc send <name> "…"`, with the user's agreement), on its report (§4) check the push, then merge. Then propose the next merge, if any.
 
 ## 7. Clean up
 

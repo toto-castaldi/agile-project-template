@@ -18,7 +18,7 @@ If `AGENTS.md` needs to deviate from this process, it must do so explicitly in a
 ## 2. Language
 
 - The **project language** is declared in `AGENTS.md`.
-- Written in the project language: requirements, design, backlog titles and descriptions, acceptance criteria, status notes, README, CHANGELOG entries, ADRs, spike reports and commit message descriptions.
+- Written in the project language: requirements, design, backlog titles and descriptions, acceptance criteria, notes, README, CHANGELOG entries, ADRs, spike reports and commit message descriptions.
 - Always in English (structural tokens, so skills and tooling stay stable across projects): file names, document section headings defined by the templates, field labels, states, priorities, IDs, branch prefixes and commit types.
 
 ## 3. Artifacts
@@ -32,16 +32,17 @@ If `AGENTS.md` needs to deviate from this process, it must do so explicitly in a
 | `docs/TECHNICAL-DESIGN.md` | Architecture, modules, data model, invariants, integrations, security, test strategy | the *how* |
 | `docs/adr/` | Architecture Decision Records for relevant decisions not adequately captured in the design | decision history |
 | `docs/spikes/` | Spike reports | research outcomes |
-| `BACKLOG.md` | Product Backlog: versions, epics, items | canonical work state |
-| `STATUS.md` | Short snapshot of the project | quick orientation |
+| `backlog/` | Product Backlog store: versions, epics and items, one JSON file per record, plus `NOTES.md` and `IDEAS.md` | canonical work state |
+| `.agents/tools/backlog.py` | CLI of the store (Python 3.10+, standard library only) | backlog operations and checks |
 | `CHANGELOG.md` | User-visible changes per released version | release history |
 | `README.md` | Short presentation of the project, setup and usage commands | nothing process-related |
 
 Rules:
 
 - `README.md` must not contain process rules, item states or agent instructions.
-- `BACKLOG.md` is the canonical source for items, dependencies and acceptance criteria. `STATUS.md` is derived from it and must always be consistent with it.
-- A requirement change is recorded first in `docs/REQUIREMENTS.md`, then reflected in `BACKLOG.md` and, if needed, in `docs/TECHNICAL-DESIGN.md`.
+- `backlog/` is the canonical source for items, dependencies and acceptance criteria. Agents read and change it **only** through the CLI (`python3 .agents/tools/backlog.py`, written `backlog` in this document and in the skills), and never read, search or edit its files directly. The only exception is resolving a merge conflict (§6.3).
+- The status of the project is computed from `backlog/` on request (§7). It is never stored.
+- A requirement change is recorded first in `docs/REQUIREMENTS.md`, then reflected in `backlog/` and, if needed, in `docs/TECHNICAL-DESIGN.md`.
 - Design choices are recorded in `docs/TECHNICAL-DESIGN.md` together with the item that introduces them.
 - Projects may define modules in `docs/TECHNICAL-DESIGN.md` §3. A module is a named part of the project, independent of epics and versions; it does not imply a Git submodule or a separate repository. Document each module's stable ID (`MOD-001`), name and responsibility, and its location or boundaries when known. IDs are sequential and never reused. Projects without modules need no module catalog.
 
@@ -50,11 +51,11 @@ Rules:
 ### 4.1 Versions
 
 - Versions follow Semantic Versioning: `vMAJOR.MINOR.PATCH`. The first version is `v0.1.0`.
-- Each version has a goal (one or two sentences), a state (`Open` or `Closed`) and the list of items assigned to it.
+- Each version has a goal (one or two sentences), a state (`Planned`, `Open` or `Closed`) and the list of items assigned to it.
 - Only one version is `Open` at a time, unless a patch version is opened to fix bugs in a closed one.
 - All items assigned to a version are required for that version, regardless of priority.
-- Changing the scope of an open version (adding, removing or moving items) is allowed but must be agreed with the user and recorded in `BACKLOG.md` and `STATUS.md`.
-- Ideas not yet assigned to a version go into the `Unassigned backlog` section of `BACKLOG.md`. They need requirements before they can be designed.
+- Changing the scope of an open version (adding, removing or moving items) is allowed but must be agreed with the user and recorded in `backlog/`.
+- Ideas not yet assigned to a version are recorded with `backlog ideas --add`, one line each and without an ID: an idea gets its ID when it becomes an item. They need requirements before they can be designed.
 
 ### 4.2 Epics
 
@@ -78,42 +79,41 @@ Rules:
 
 ### 4.4 Item fields
 
-Every item is written in `BACKLOG.md` under its epic, inside the version section it belongs to:
+Every item is the file `backlog/items/<ID>.json`, created with `backlog add`, changed with `backlog edit` and the state commands, and shown with `backlog show`. Empty optional fields are left out:
 
-```markdown
-#### US-001 — Title in project language
-
-- **Epic:** EPIC-001 — Epic title
-- **Module:** MOD-001 — Module name              (optional)
-- **Type:** User Story · **Priority:** P1 · **Status:** Todo
-- **Branch:** `us/US-001-short-slug`            (set when the item starts)
-- **Dependencies:** none | US-000, TEC-000
-- **Requirements:** REQ-XXX-001, REQ-NFR-001     (mandatory for US and BUG)
-- **Design references:** TECHNICAL-DESIGN §3, ADR-001   (mandatory for TEC when they produce or change design)
-- **Description:** As a <actor>, I want <capability> so that <benefit>.   (US only, optional for others)
-- **Acceptance criteria:**
-  - Verifiable criterion.
-  - Verifiable criterion.
-- **Blocked by:** reason and external dependency   (only while Blocked)
-- **Outcome:** one or two sentences with what was delivered and verified, closing date   (set when Done)
+```json
+{
+  "id": "US-001",
+  "title": "Title in project language",
+  "version": "v0.1.0",
+  "epic": "EPIC-001",
+  "module": "MOD-001",
+  "type": "User Story",
+  "priority": "P1",
+  "status": "Todo",
+  "branch": "us/US-001-short-slug",
+  "dependencies": ["TEC-000"],
+  "dependency_override": "why the item started anyway",
+  "requirements": ["REQ-XXX-001", "REQ-NFR-001"],
+  "design_references": ["TECHNICAL-DESIGN §3", "ADR-001"],
+  "description": "As a <actor>, I want <capability> so that <benefit>.",
+  "acceptance_criteria": ["Verifiable criterion."],
+  "blocked_by": "reason and external dependency",
+  "outcome": "one or two sentences with what was delivered and verified",
+  "closed_at": "YYYY-MM-DD"
+}
 ```
 
-Bug items additionally contain:
-
-```markdown
-- **Found in:** v0.1.0
-- **Steps to reproduce:** ...
-- **Expected:** ...
-- **Actual:** ...
-```
+Bug items additionally contain `found_in`, `steps_to_reproduce`, `expected` and `actual`.
 
 Field rules:
 
-- `Epic` is mandatory and contains ID and title.
-- `Module` is optional for every item type. When present, it identifies one module from `docs/TECHNICAL-DESIGN.md` §3 by ID and name. Omit it for unassigned or cross-cutting work; do not invent a module. The epic and module are independent classifications.
+- `epic` is mandatory and contains the epic ID.
+- `module` is optional for every item type. When present, it is the ID of one module from `docs/TECHNICAL-DESIGN.md` §3. Omit it for unassigned or cross-cutting work; do not invent a module. The epic and module are independent classifications.
 - Every User Story and Bug references at least one requirement. Purely technical items reference the design sections they produce or change, or the process sections (`PROCESS §N`) they touch.
 - Acceptance criteria are concrete and verifiable. Avoid vague wording such as "works well".
-- Dates (`Outcome`, version states, and dates in `STATUS.md` and `CHANGELOG.md`) use `YYYY-MM-DD` and are the current date read from the system clock (`date +%F`) when the record is written. Never estimate or infer a date.
+- `branch` is set when the item starts, `blocked_by` only while `Blocked`, `outcome` and `closed_at` when `Done` or `Dropped` (for `Dropped`, `outcome` is the reason).
+- Dates in `backlog/` are set by the CLI from the system clock. Dates in `CHANGELOG.md` use `YYYY-MM-DD` and are the current date read with `date +%F` when the record is written. Never estimate or infer a date.
 
 ### 4.5 States
 
@@ -123,8 +123,9 @@ Field rules:
 | `In Progress` | Started in its dedicated branch |
 | `Blocked` | Cannot proceed; the reason and any external dependency are recorded |
 | `Done` | Definition of Done satisfied |
+| `Dropped` | Abandoned; the file is kept so that its ID is never reused |
 
-An item whose dependencies are not `Done` should not be started. If the user explicitly asks to start it anyway, record that in the item.
+An item whose dependencies are not `Done` should not be started. If the user explicitly asks to start it anyway, record that with `backlog start --override-dependencies`.
 
 ### 4.6 Priorities
 
@@ -159,7 +160,7 @@ Priority orders the work inside a version; it does not decide whether an item be
 - Branch name: `<prefix><ID>-<short-slug>`, slug in lowercase kebab-case, in the project language. Examples: `us/US-004-create-single-lesson`, `task/TEC-002-scaffold`, `spike/SPIKE-001-payment-provider`, `fix/BUG-003-timezone-offset`.
 - Release branches: `release/vX.Y.Z` (see §9).
 - Adding a new item of any type starts only on `main`, with a clean working tree and an up-to-date branch. If the current branch is not `main` or the working tree is dirty, stop and ask the user to resolve that state; do not switch branches, stash or discard changes automatically. When an upstream exists, update `main` with `git pull --ff-only` before making changes.
-- Each item addition is documentation-only and uses exactly one `docs(<ID>)` commit directly on `main`, containing the new item and all related requirements, design and status updates. Do not include unrelated changes or implementation. No branch or merge is created for the addition; do not push unless the user explicitly requests it.
+- Each item addition is documentation-only and uses exactly one `docs(<ID>)` commit directly on `main`, containing the new item and all related requirements and design updates. Do not include unrelated changes or implementation. No branch or merge is created for the addition; do not push unless the user explicitly requests it.
 - If an item branch reveals a new dependency, do not add that item there: preserve the current work and ask the user to return to a clean `main` before starting the addition.
 - Other backlog grooming (changing requirements, existing items, epics or version scope without adding an item or implementing anything) remains in a `backlog/<short-slug>` branch and is merged like an item branch. Commit type `docs`, scope the ID of the main item touched (e.g. `docs(US-014): aggiorna i criteri di accettazione`).
 
@@ -200,7 +201,7 @@ Commits must not contain secrets, credentials or local agent state.
 - The merge and push closing gate runs only lint, typecheck, build and in-memory unit tests as specified in `AGENTS.md`; integration and end-to-end evidence is gathered separately when needed.
 - Merges use `git merge --no-ff` with message `merge(<ID>): <item title>`.
 - The merge commit contains only the merge and the resolution of its conflicts. If the branch has an error (a wrong date, an inconsistent record, a failing check), do not fix it in the merge: report it and fix it first with a commit on the item branch (with parallel work, by its worker, §6.5), then merge.
-- A merge conflict in `STATUS.md` is never resolved by hand or by picking a side: regenerate `STATUS.md` from the merged `BACKLOG.md` (§7). In `BACKLOG.md` keep both sides' changes, each item with its own most recent state.
+- Each record is a separate file, so branches normally do not conflict in `backlog/`. If one record was changed on both sides, keep both sides' changes in that file, or for `NOTES.md` and `IDEAS.md` keep the lines of both sides. Then run `backlog check` before committing the merge.
 - After a successful merge and push, delete the local and remote item branch, after verifying the branch is actually merged. Never delete unmerged branches, except when releasing an item that was claimed but never started (§6.5).
 
 ### 6.4 Shared claims
@@ -212,7 +213,7 @@ Optional rule for agents working in parallel in separate clones or directories. 
 - Push the **item branch** right after every commit that changes the item's state in that branch: start (`In Progress`), `Blocked`, resume and `Done`. Use `git push -u origin <branch>` for the first push. `main` is never pushed automatically: §6.3 does not change.
 - If a push fails, keep the local commit, report that the claim is not shared, and do not start or continue the implementation until the user decides.
 - The claim ends when the merged branch is deleted from the remote (§6.3).
-- `STATUS.md` on `main` still reflects only merged state; the cross-clone view comes from the item branches themselves.
+- `backlog status --branches` is the cross-clone view: it fetches and shows each item as it is on its unmerged item branch on `origin`. Without the option, the status reflects only the current checkout.
 
 ### 6.5 Parallel work
 
@@ -235,38 +236,25 @@ Optional mode in which one agent, the orchestrator, runs several items at the sa
 - **Release:** a claimed item that never received the go can be released on explicit user request, as an exception to §6.3: only if its branch contains nothing but the start commit, the orchestrator ends the worker, deletes the item branch locally and on `origin`, and removes the clone (same checks as the cleanup). On `main` the item is still `Todo`.
 - **Merge:**
   - only the orchestrator merges, in the main clone, one item at a time and only on explicit user request (§6.3 unchanged);
-  - a conflict in `STATUS.md` is resolved by regenerating it from the merged `BACKLOG.md` (§6.3). Any other conflict that is not trivially resolvable is reported to the user.
+  - a conflict in `backlog/` is resolved as in §6.3. Any other conflict that is not trivially resolvable is reported to the user.
 - **Cleanup:** after a verified merge and the deletion of the item branch, the orchestrator ends the worker's agent and removes its clone. It never removes a clone that has uncommitted changes or commits not contained in a remote branch; it reports such a clone to the user instead.
 - The worker agent command comes from `AGENTS.md` §10 (`Worker agent command`, default `pi --approve`). How agents are started and followed is tooling (the `orchestrate` skill) and does not change these rules.
 
-## 7. STATUS.md
+## 7. Project status
 
-`STATUS.md` is the short snapshot the agent reads first. It contains at least:
+The status is computed from `backlog/` and never stored. `backlog status` is what the agent reads first. Its size does not grow with the backlog. It shows:
 
-- last update date;
-- current version, its phase (one short sentence) and progress (`done/total` items and percentage);
-- item counts per state;
+- open versions with progress (`done/total` items and percentage; `Dropped` items are not counted) and item counts per state;
 - items `In Progress` with epic and branch;
 - items `Blocked` with epic and reason;
-- the last 10 completed items with epic and closing date;
-- next ready items (state `Todo` with all dependencies `Done`), ordered by priority;
+- next ready items (state `Todo` in an open version with all dependencies `Done`), ordered by priority;
+- the last completed items with epic and closing date;
 - closed versions with closing date and tag;
-- short notes: at most a few lines of cross-cutting information. Per-item details belong in the item's `Outcome` field, not here.
+- the notes in `backlog/NOTES.md`: at most a few lines of cross-cutting information, changed with `backlog notes`. Per-item details belong in the item's `outcome`, not here.
 
-When a displayed item has a `Module`, include its module ID in that entry; use `—` for items without one when a module column is present. Epics and modules in `STATUS.md` only classify items: no epic or module states or progress.
+Each list is limited and says how many entries it left out. `backlog list`, `backlog ready` and `backlog show` give the rest; `Done` and `Dropped` items are listed only on request, and `backlog export` prints the whole backlog as Markdown for a human reader.
 
-### Automatic updates
-
-The agent updates `STATUS.md` together with `BACKLOG.md`, without waiting for a request, whenever an item starts, gets blocked, resumes, is completed or reopened, when the scope of a version changes and when a version is closed.
-
-- The update happens in the same branch and in the same commit as the event that causes it. Its date comes from the system clock (§4.4). If an item's module assignment changes, update any displayed entry in `STATUS.md` in the same commit.
-- After every update of `STATUS.md`, count the item states mechanically in `BACKLOG.md`, in the section of the version shown as current in `STATUS.md` only, replacing `vX.Y.Z`:
-
-  ```bash
-  awk '/^## Version vX.Y.Z/{f=1;next} /^## /{f=0} f' BACKLOG.md | grep -o 'Status:\*\* [A-Za-z ]*' | sort | uniq -c
-  ```
-
-  Every number must match the item-state table of `STATUS.md` (a state with no items counts 0), and the `Done` number and the total must match the progress (`done/total` and percentage). Updating the progress line alone is not enough: the state table must change too. Also check that `In progress`, `Blocked` and `Next ready items` list exactly the items in those states. If anything differs, report the inconsistency and align both files.
+`backlog check` validates the store: schema, references to versions, epics, requirements and modules, dependency cycles, state rules and files edited outside the CLI. Every state change goes through a CLI command in the same commit as the work that causes it.
 
 ## 8. Definition of Done
 
@@ -278,7 +266,7 @@ An item is `Done` only when:
 4. no secrets are present in files, commits or logs;
 5. requirements, technical design, ADRs, configuration examples and README are updated where needed;
 6. a line describing the change is added under `[Unreleased]` in `CHANGELOG.md` for user-visible changes;
-7. `BACKLOG.md` (state `Done`, `Outcome`) and `STATUS.md` reflect the real state and are consistent with each other;
+7. the item is `Done` with its `outcome`, and `backlog check` passes;
 8. all the work is committed in the item's dedicated branch;
 9. the project-specific additions to the Definition of Done in `AGENTS.md` are satisfied.
 
@@ -296,14 +284,13 @@ Procedure:
 
 1. Create `release/vX.Y.Z` from up-to-date `main`.
 2. In `CHANGELOG.md`, rename `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD` and add a new empty `[Unreleased]` section.
-3. In `BACKLOG.md`, mark the version `Closed` with the date; open the next version if the user has defined it.
-4. In `STATUS.md`, move the version to closed versions with date and tag, and update the current version.
-5. Commit `release(vX.Y.Z): <short description>`, merge `--no-ff` into `main` with `merge(vX.Y.Z): release`, then create the annotated tag `vX.Y.Z` on the merge commit.
-6. Push `main` and the tag, then delete the release branch.
+3. Run `backlog close-version vX.Y.Z`, then open the next version if the user has defined it (`backlog version open`, or `backlog version add`).
+4. Commit `release(vX.Y.Z): <short description>`, merge `--no-ff` into `main` with `merge(vX.Y.Z): release`, then create the annotated tag `vX.Y.Z` on the merge commit.
+5. Push `main` and the tag, then delete the release branch.
 
 ## 10. Agent operating loop
 
-1. At the start of a session, read `STATUS.md`, then the relevant parts of `BACKLOG.md`.
+1. At the start of a session, run `backlog status`, then `backlog show` for the relevant items.
 2. Before working on an item, read its requirements and design references.
 3. New work not in the backlog is first added to the backlog (and to requirements if it changes behavior) before implementation.
 4. If the request is ambiguous, conflicts with documents or changes the scope of the version, ask before acting.
@@ -317,7 +304,7 @@ The repository provides skills in `.agents/skills/` (exposed to Claude Code thro
 | --- | --- |
 | `kickoff` | Initialize a new project from the template (item `TEC-001`) |
 | `add-item` | Add a requirement and/or backlog item |
-| `start-task` | Start an item: branch, state, status |
+| `start-task` | Start an item: branch and state |
 | `finish-task` | Verify the Definition of Done and complete an item in its branch |
 | `merge-task` | Merge a completed item into `main` (explicit request only) |
 | `close-version` | Close a version (explicit request only) |

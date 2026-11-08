@@ -31,7 +31,7 @@ TYPES = {
 TYPE_BY_NAME = {name: prefix for prefix, (name, _) in TYPES.items()}
 STATES = ("Todo", "In Progress", "Blocked", "Done", "Dropped")
 PRIORITIES = ("P0", "P1", "P2")
-VERSION_STATES = ("Open", "Closed")
+VERSION_STATES = ("Planned", "Open", "Closed")
 
 ITEM_FIELDS = (
     "id", "title", "version", "epic", "module", "type", "priority", "status",
@@ -243,8 +243,8 @@ def check_versions(store: Store, errors) -> None:
         check_date(vid, version, "closed_at", errors)
         if state == "Closed" and not version.get("closed_at"):
             errors.append((vid, "Closed without closed_at"))
-        if state == "Open" and version.get("closed_at"):
-            errors.append((vid, "Open with closed_at"))
+        if state != "Closed" and version.get("closed_at"):
+            errors.append((vid, f"{state} with closed_at"))
     regular = [v["id"] for v in store.open_versions() if version_key(v["id"])[2] == 0]
     for vid in regular[1:]:
         errors.append((vid, f"more than one open version: {', '.join(regular)}"))
@@ -414,12 +414,15 @@ def git(root: Path, *args: str) -> subprocess.CompletedProcess:
 
 
 def overlay_branches(store: Store) -> None:
-    """Replace each item with its copy on its own remote item branch, newest branch last."""
+    """Replace each item with its copy on its own unmerged remote item branch, newest branch last."""
     fetched = git(store.root, "fetch", "--prune", "origin")
     if fetched.returncode != 0:
         print(f"warning: git fetch failed, branch data may be stale: {fetched.stderr.strip()}", file=sys.stderr)
+    has_main = git(store.root, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/main").returncode == 0
+    unmerged = ["--no-merged=refs/remotes/origin/main"] if has_main else []
     refs = git(
-        store.root, "for-each-ref", "--sort=committerdate", "--format=%(refname:short)", "refs/remotes/origin/",
+        store.root, "for-each-ref", "--sort=committerdate", "--format=%(refname:short)", *unmerged,
+        "refs/remotes/origin/",
     )
     if refs.returncode != 0:
         print(f"warning: cannot list remote branches: {refs.stderr.strip()}", file=sys.stderr)
@@ -836,8 +839,21 @@ def cmd_version_add(store: Store, args) -> int:
     store.require_loaded()
     if args.id in store.versions:
         raise BacklogError(f"version {args.id} already exists")
-    save(store, "versions", {"id": args.id, "goal": args.goal, "state": "Open"})
+    state = "Planned" if args.planned else "Open"
+    save(store, "versions", {"id": args.id, "goal": args.goal, "state": state})
     print(args.id)
+    return 0
+
+
+def cmd_version_open(store: Store, args) -> int:
+    store.require_loaded()
+    version = store.versions.get(args.id)
+    if version is None:
+        raise BacklogError(f"version {args.id} not found")
+    if version.get("state") != "Planned":
+        raise BacklogError(f"version {args.id} is not Planned")
+    save(store, "versions", {**version, "state": "Open"})
+    print(f"{args.id} Open")
     return 0
 
 
@@ -988,9 +1004,12 @@ def build_parser() -> argparse.ArgumentParser:
     drop.add_argument("--reason", required=True)
 
     version = commands.add_parser("version", help="version records").add_subparsers(dest="action", required=True)
-    version_add = writing(version, "add", cmd_version_add, "open a new version")
+    version_add = writing(version, "add", cmd_version_add, "create a version, Open unless --planned")
     version_add.add_argument("id")
     version_add.add_argument("--goal", required=True)
+    version_add.add_argument("--planned", action="store_true", help="a future version, not open yet")
+    version_open = writing(version, "open", cmd_version_open, "Planned to Open")
+    version_open.add_argument("id")
     version_edit = writing(version, "edit", cmd_version_edit, "change the goal")
     version_edit.add_argument("id")
     version_edit.add_argument("--goal", required=True)

@@ -4,23 +4,23 @@
 
 ## 0. Process
 
-This project follows the shared process in [`docs/PROCESS.md`](docs/PROCESS.md). Read it before doing any work: it defines backlog, items, states, branches, commits, merges, `STATUS.md` updates, the Definition of Done and version closing.
+This project follows the shared process in [`docs/PROCESS.md`](docs/PROCESS.md). Read it before doing any work: it defines backlog, items, states, branches, commits, merges, project status, the Definition of Done and version closing.
 
 This file contains only project-specific rules. Where it conflicts with `docs/PROCESS.md`, the process wins unless the deviation is listed in [Process overrides](#8-process-overrides).
 
-At the start of every session read `STATUS.md`, then the relevant parts of `BACKLOG.md`.
+At the start of every session run `python3 .agents/tools/backlog.py status`, then `show` for the relevant items. Read and change the backlog only through that CLI (`docs/PROCESS.md` §3).
 
 ## 1. Project
 
 - **Name:** `<project-name>`
 - **Summary:** `<one or two sentences: what the project does and for whom>`
-- **Current version:** v0.1.0 — see `STATUS.md`.
+- **Current version:** see `python3 .agents/tools/backlog.py status`.
 - **Requirements:** `docs/REQUIREMENTS.md` · **Design:** `docs/TECHNICAL-DESIGN.md`
 
 ## 2. Language
 
 - **Project language:** `<e.g. Italian>`
-- Write project content (requirements, design, backlog text, status notes, README, CHANGELOG, commit descriptions, user-facing messages) in the project language, as defined in `docs/PROCESS.md` §2.
+- Write project content (requirements, design, backlog text, notes, README, CHANGELOG, commit descriptions, user-facing messages) in the project language, as defined in `docs/PROCESS.md` §2.
 - Code identifiers and code comments: `<e.g. English>`.
 
 ## 3. Scope
