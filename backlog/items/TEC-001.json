@@ -1,0 +1,25 @@
+{
+  "id": "TEC-001",
+  "title": "Kickoff",
+  "version": "v0.1.0",
+  "epic": "EPIC-001",
+  "type": "Task",
+  "priority": "P0",
+  "status": "Todo",
+  "dependencies": [],
+  "design_references": [
+    "PROCESS §3",
+    "PROCESS §4",
+    "PROCESS §5",
+    "AGENTS (all sections)"
+  ],
+  "description": "Initialize the project from the template by interviewing the user. Run the `kickoff` skill.",
+  "acceptance_criteria": [
+    "`AGENTS.md` is filled in (project, language, scope, stack, domain rules, quality gate, DoD additions) and the \"template not initialized\" notice is removed.",
+    "`docs/REQUIREMENTS.md` contains goal, actors, glossary, in/out of scope, first functional and non-functional requirements with stable IDs and the release acceptance criteria of v0.1.0.",
+    "`docs/TECHNICAL-DESIGN.md` contains the initial architectural decisions and the open decisions to be closed by backlog items.",
+    "The backlog contains the goal of v0.1.0, its epics and its items with dependencies, requirements and acceptance criteria; ideas outside v0.1.0 are recorded as unassigned ideas.",
+    "`README.md` presents the project instead of the template; `CHANGELOG.md` and `.gitignore` are adapted to the project.",
+    "`backlog check` passes."
+  ]
+}

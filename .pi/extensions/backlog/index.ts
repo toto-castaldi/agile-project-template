@@ -1,14 +1,14 @@
 /**
- * Backlog overlay — read-only browser for the items of BACKLOG.md.
+ * Backlog overlay — read-only browser for the items of backlog/.
  *
  * Open with ctrl+shift+b or /backlog. The shortcut can be changed in pi's
  * settings.json (global or project): `"backlogOverlay": { "shortcut": "alt+b" }`,
  * or disabled with `false`. One item per screen:
- *   ←/→ or ↑/↓  previous / next item (BACKLOG.md order, across epics and versions)
+ *   ←/→ or ↑/↓  previous / next item (by version, epic and ID)
  *   Home/End    first / last item
  *   t/T         next / previous Type filter     (all, User Story, Task, Spike, Bug)
  *   p/P         next / previous Priority filter (all, P0, P1, P2)
- *   s/S         next / previous Status filter   (all, Todo, In Progress, Blocked, Done)
+ *   s/S         next / previous Status filter   (all, Todo, In Progress, Blocked, Done, Dropped)
  *   PgUp/PgDn   scroll the current item
  *   Esc or q    close
  *
@@ -16,9 +16,9 @@
  * start as `Type: all · Priority: all · Status: Todo`, are kept in memory for
  * the rest of the pi session and reset when pi restarts or on /reload.
  *
- * Item branches: BACKLOG.md of the current directory is the base. Each item is
- * replaced by its copy in the BACKLOG.md of its item branch (`us/`, `task/`,
- * `spike/`, `fix/` + `<ID>-<slug>`, PROCESS §4.3 and §6.1), local or
+ * Item branches: the backlog of the current directory is the base, read through
+ * .agents/tools/backlog.py. Each item is replaced by its file on its item branch
+ * (`us/`, `task/`, `spike/`, `fix/` + `<ID>-<slug>`, PROCESS §4.3 and §6.1), local or
  * remote-tracking, when that branch is not merged into local `main` or into a
  * remote's default branch. A local branch wins over the remote-tracking one
  * with the same name. On an item branch, its item keeps the working-tree copy
@@ -28,13 +28,12 @@
  * timeout) in the background and updates when it completes. Only git refs are
  * read and updated; files of the working tree are never written.
  *
- * Project-agnostic: it relies only on the structural labels of BACKLOG.md
- * defined in docs/PROCESS.md §4 (`## Version vX.Y.Z`, `**State:**`,
- * `### EPIC-NNN — …`, `#### <ID> — <title>`, `- **Field:** value`).
+ * Project-agnostic: it relies only on the JSON output of the backlog CLI and on
+ * the item files defined in docs/PROCESS.md §4.4.
  * It never writes any file.
  */
 
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -46,7 +45,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
-const BACKLOG_FILE = "BACKLOG.md";
+const BACKLOG_TOOL = join(".agents", "tools", "backlog.py");
 const DEFAULT_SHORTCUT = "ctrl+shift+b";
 const FETCH_TIMEOUT_MS = 10_000;
 const GIT_TIMEOUT_MS = 5_000;
@@ -70,7 +69,16 @@ interface BacklogItem {
 
 type FetchState = "none" | "fetching" | "failed" | "done";
 
-type LoadResult = { items: BacklogItem[] } | { message: string };
+/** Fields of the JSON records of the backlog store. */
+type BacklogRecord = Record<string, unknown>;
+
+/** Versions and epics of the store, needed to describe items read from branches. */
+interface Lookup {
+	versions: Map<string, BacklogRecord>;
+	epics: Map<string, BacklogRecord>;
+}
+
+type LoadResult = { items: BacklogItem[]; lookup: Lookup } | { message: string };
 
 // ---------------------------------------------------------------------------
 // Filters (values and order from docs/PROCESS.md §4.3, §4.5, §4.6)
@@ -81,7 +89,7 @@ const ALL = "all";
 const FILTERS = [
 	{ key: "t", field: "Type", values: [ALL, "User Story", "Task", "Spike", "Bug"] },
 	{ key: "p", field: "Priority", values: [ALL, "P0", "P1", "P2"] },
-	{ key: "s", field: "Status", values: [ALL, "Todo", "In Progress", "Blocked", "Done"] },
+	{ key: "s", field: "Status", values: [ALL, "Todo", "In Progress", "Blocked", "Done", "Dropped"] },
 ] as const;
 
 type FilterField = (typeof FILTERS)[number]["field"];
@@ -124,68 +132,84 @@ function describeFilters(filters: Filters): string {
 }
 
 // ---------------------------------------------------------------------------
-// Parsing
+// Reading the store
 // ---------------------------------------------------------------------------
 
-function parseBacklog(text: string): BacklogItem[] {
-	const items: BacklogItem[] = [];
-	let version: string | undefined;
-	let versionState: string | undefined;
-	let epic: string | undefined;
-	let current: BacklogItem | undefined;
-	let inFence = false;
+const ITEM_LABELS: ReadonlyArray<readonly [string, string]> = [
+	["Epic", "epic"],
+	["Module", "module"],
+	["Type", "type"],
+	["Priority", "priority"],
+	["Status", "status"],
+	["Branch", "branch"],
+	["Dependencies", "dependencies"],
+	["Dependency override", "dependency_override"],
+	["Requirements", "requirements"],
+	["Design references", "design_references"],
+	["Description", "description"],
+	["Found in", "found_in"],
+	["Steps to reproduce", "steps_to_reproduce"],
+	["Expected", "expected"],
+	["Actual", "actual"],
+];
 
-	for (const rawLine of text.split(/\r?\n/)) {
-		const line = rawLine.replace(/\s+$/, "");
+function strings(value: unknown): string[] {
+	return Array.isArray(value) ? value.map(String) : [];
+}
 
-		if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
-		const heading = inFence ? null : /^(#{1,6})\s+(.*)$/.exec(line);
-
-		if (heading) {
-			const level = heading[1]!.length;
-			const title = heading[2]!.trim();
-			if (level <= 4) current = undefined;
-			if (level <= 2) {
-				const isVersion = /^Version\s+v?\d/i.test(title);
-				version = isVersion ? title : undefined;
-				versionState = undefined;
-				epic = undefined;
-			} else if (level === 3) {
-				epic = title;
-			} else if (level === 4) {
-				current = { heading: title, version, versionState, epic, body: [] };
-				items.push(current);
-			}
-			if (level <= 4) continue;
-		}
-
-		if (current) {
-			current.body.push(line);
-		} else if (version && !inFence) {
-			const state = /^\*\*State:\*\*\s*(.*)$/.exec(line.trim());
-			if (state) versionState = state[1]!.trim();
-		}
+function toBacklogItem(record: BacklogRecord, lookup: Lookup): BacklogItem {
+	const body: string[] = [];
+	for (const [label, field] of ITEM_LABELS) {
+		const value = record[field];
+		const text = Array.isArray(value) ? value.join(", ") : value ? String(value) : "";
+		if (text) body.push(`- **${label}:** ${text}`);
+		else if (field === "dependencies") body.push("- **Dependencies:** none");
 	}
+	body.push("- **Acceptance criteria:**", ...strings(record.acceptance_criteria).map((c) => `  - ${c}`));
+	if (record.blocked_by) body.push(`- **Blocked by:** ${String(record.blocked_by)}`);
+	if (record.outcome) body.push(`- **Outcome:** ${String(record.outcome)} (${String(record.closed_at)})`);
 
-	for (const item of items) {
-		while (item.body.length > 0 && item.body[0]!.trim() === "") item.body.shift();
-		while (item.body.length > 0 && item.body[item.body.length - 1]!.trim() === "") item.body.pop();
-	}
-	return items;
+	const versionId = record.version ? String(record.version) : undefined;
+	const epicId = record.epic ? String(record.epic) : undefined;
+	const epicTitle = epicId ? lookup.epics.get(epicId)?.title : undefined;
+	const versionState = versionId ? lookup.versions.get(versionId)?.state : undefined;
+	return {
+		heading: `${String(record.id)} — ${String(record.title)}`,
+		version: versionId ? `Version ${versionId}` : undefined,
+		versionState: versionState ? String(versionState) : undefined,
+		epic: epicId ? `${epicId}${epicTitle ? ` — ${String(epicTitle)}` : ""}` : undefined,
+		body,
+	};
+}
+
+function byId(records: BacklogRecord[]): Map<string, BacklogRecord> {
+	return new Map(records.map((record) => [String(record.id), record]));
 }
 
 function loadBacklog(cwd: string): LoadResult {
-	const path = join(cwd, BACKLOG_FILE);
-	if (!existsSync(path)) return { message: `${BACKLOG_FILE} not found in ${cwd}.` };
-	let text: string;
+	if (!existsSync(join(cwd, BACKLOG_TOOL))) return { message: `${BACKLOG_TOOL} not found in ${cwd}.` };
+	let store: { versions: BacklogRecord[]; epics: BacklogRecord[]; items: BacklogRecord[] };
 	try {
-		text = readFileSync(path, "utf8");
+		const output = execFileSync("python3", [join(cwd, BACKLOG_TOOL), "export", "--json"], {
+			encoding: "utf8",
+			timeout: GIT_TIMEOUT_MS,
+			maxBuffer: 32 * 1024 * 1024,
+			stdio: ["ignore", "pipe", "pipe"],
+		});
+		store = JSON.parse(output);
 	} catch (error) {
-		return { message: `Cannot read ${BACKLOG_FILE}: ${error instanceof Error ? error.message : String(error)}` };
+		const stderr = (error as { stderr?: unknown }).stderr;
+		const detail = stderr ? String(stderr).trim() : error instanceof Error ? error.message : String(error);
+		return { message: `Cannot read the backlog: ${detail}` };
 	}
-	const items = parseBacklog(text);
-	if (items.length === 0) return { message: `${BACKLOG_FILE} contains no items.` };
-	return { items };
+	const lookup = { versions: byId(store.versions), epics: byId(store.epics) };
+	const order = (a: string | undefined, b: string | undefined) =>
+		(a ?? "").localeCompare(b ?? "", undefined, { numeric: true });
+	const items = store.items
+		.map((record) => toBacklogItem(record, lookup))
+		.sort((a, b) => order(a.version, b.version) || order(a.epic, b.epic));
+	if (items.length === 0) return { message: "The backlog contains no items." };
+	return { items, lookup };
 }
 
 // ---------------------------------------------------------------------------
@@ -297,17 +321,27 @@ async function itemBranches(cwd: string, remotes: string[]): Promise<Map<string,
 }
 
 /** Base items with each one replaced by its copy from its unmerged item branch, when there is one. */
-async function resolveFromBranches(cwd: string, remotes: string[], base: BacklogItem[]): Promise<BacklogItem[]> {
+async function resolveFromBranches(
+	cwd: string,
+	remotes: string[],
+	base: BacklogItem[],
+	lookup: Lookup,
+): Promise<BacklogItem[]> {
 	const ids = new Set(base.map(itemId).filter((id): id is string => id !== undefined));
 	const branches = await itemBranches(cwd, remotes);
 	const resolved = new Map<string, BacklogItem>();
 	for (const [id, candidates] of branches) {
 		if (!ids.has(id)) continue;
 		for (const candidate of candidates) {
-			// `<ref>:./BACKLOG.md` is relative to the current directory, like loadBacklog.
-			const text = await git(cwd, ["show", `${candidate.ref}:./${BACKLOG_FILE}`]);
-			const item = text === null ? undefined : parseBacklog(text).find((i) => itemId(i) === id);
-			if (!item) continue;
+			// `<ref>:./backlog/…` is relative to the current directory, like loadBacklog.
+			const text = await git(cwd, ["show", `${candidate.ref}:./backlog/items/${id}.json`]);
+			if (text === null) continue;
+			let item: BacklogItem;
+			try {
+				item = toBacklogItem(JSON.parse(text) as BacklogRecord, lookup);
+			} catch {
+				continue;
+			}
 			const alsoIn = candidates.filter((c) => c !== candidate).map((c) => c.ref);
 			resolved.set(id, { ...item, source: candidate.ref, alsoIn: alsoIn.length > 0 ? alsoIn : undefined });
 			break;
@@ -390,7 +424,7 @@ function renderBodyLine(theme: Theme, line: string, width: number): string[] {
 // ---------------------------------------------------------------------------
 
 class BacklogOverlay {
-	/** Indices into the items of the ones that match the filters, in BACKLOG.md order. */
+	/** Indices into the items of the ones that match the filters, in display order. */
 	private matching: number[] = [];
 	/** Position inside `matching`. */
 	private index = 0;
@@ -414,7 +448,7 @@ class BacklogOverlay {
 
 	/** Replace the items (same base, states resolved from item branches), keeping the current item and filters. */
 	setItems(items: BacklogItem[]): void {
-		this.load = { items };
+		if ("items" in this.load) this.load = { ...this.load, items };
 		this.applyFilters(true);
 		this.invalidate();
 		this.requestRender();
@@ -655,6 +689,7 @@ function resolveShortcut(cwd: string): ShortcutSetting {
 async function refreshFromBranches(
 	cwd: string,
 	base: BacklogItem[],
+	lookup: Lookup,
 	overlay: BacklogOverlay,
 	isClosed: () => boolean,
 ): Promise<void> {
@@ -663,7 +698,7 @@ async function refreshFromBranches(
 		if (remotes === null || isClosed()) return;
 		const fetch = remotes.length > 0 ? git(cwd, ["fetch", "--prune", "--quiet"], FETCH_TIMEOUT_MS) : null;
 		if (fetch) overlay.setFetchState("fetching");
-		const local = await resolveFromBranches(cwd, remotes, base);
+		const local = await resolveFromBranches(cwd, remotes, base, lookup);
 		if (!isClosed()) overlay.setItems(local);
 		if (!fetch) return;
 		const fetched = (await fetch) !== null;
@@ -672,7 +707,7 @@ async function refreshFromBranches(
 			overlay.setFetchState("failed");
 			return;
 		}
-		const updated = await resolveFromBranches(cwd, remotes, base);
+		const updated = await resolveFromBranches(cwd, remotes, base, lookup);
 		if (isClosed()) return;
 		overlay.setItems(updated);
 		overlay.setFetchState("done");
@@ -711,7 +746,7 @@ export default function (pi: ExtensionAPI) {
 							done();
 						},
 					);
-					if ("items" in load) void refreshFromBranches(cwd, load.items, overlay, () => closed);
+					if ("items" in load) void refreshFromBranches(cwd, load.items, load.lookup, overlay, () => closed);
 					return overlay;
 				},
 				{
@@ -727,7 +762,7 @@ export default function (pi: ExtensionAPI) {
 	const { shortcut, warning } = resolveShortcut(process.cwd());
 	if (shortcut) {
 		pi.registerShortcut(shortcut, {
-			description: "Browse BACKLOG.md items (read-only)",
+			description: "Browse backlog items (read-only)",
 			handler: async (ctx) => show(ctx),
 		});
 	}
@@ -738,7 +773,7 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	pi.registerCommand("backlog", {
-		description: "Browse BACKLOG.md items (read-only overlay)",
+		description: "Browse backlog items (read-only overlay)",
 		handler: async (_args, ctx) => show(ctx),
 	});
 }

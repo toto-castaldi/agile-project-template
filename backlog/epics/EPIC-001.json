@@ -1,0 +1,5 @@
+{
+  "id": "EPIC-001",
+  "title": "Project foundation",
+  "scope": "project initialization, scaffold, quality gate, local runtime and process tooling."
+}

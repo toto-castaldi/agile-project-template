@@ -1,16 +1,16 @@
 ---
 name: finish-task
-description: Complete the backlog item of the current branch - verify acceptance criteria and the Definition of Done, run the quality gate, update docs, CHANGELOG, BACKLOG.md and STATUS.md, and commit in the item branch without merging. Use when an item's implementation is finished or the user asks to close/complete an item.
+description: Complete the backlog item of the current branch - verify acceptance criteria and the Definition of Done, run the quality gate, update docs, CHANGELOG and the backlog, and commit in the item branch without merging. Use when an item's implementation is finished or the user asks to close/complete an item.
 ---
 
 # Finish an item
 
-Rules: `docs/PROCESS.md` §7, §8 and the quality gate and DoD additions in `AGENTS.md`. The item is the one of the current branch, or the one given in the user's arguments.
+Rules: `docs/PROCESS.md` §7, §8 and the quality gate and DoD additions in `AGENTS.md`. The item is the one of the current branch, or the one given in the user's arguments. `backlog` is `python3 .agents/tools/backlog.py`.
 
 ## 1. Checks
 
 1. You are on the item's dedicated branch, not on `main`.
-2. The item is `In Progress` in `BACKLOG.md`.
+2. The item is `In Progress` (`backlog show <ID>`).
 
 ## 2. Verify
 
@@ -26,12 +26,11 @@ If anything is not satisfied, the item is **not** `Done`: report what is missing
 
 ## 3. Update records
 
-Every date written below is today's date from `date +%F` (`docs/PROCESS.md` §4.4).
+The date in `CHANGELOG.md`, if any, is today's date from `date +%F` (`docs/PROCESS.md` §4.4).
 
 1. `CHANGELOG.md`: for user-visible changes, add a line under `[Unreleased]` in the right subsection (`Added`, `Changed`, `Fixed`, `Removed`), in the project language, ending with the item ID.
-2. `BACKLOG.md`: `Status: Done`, `Outcome` with what was delivered and verified and the closing date: today's date from `date +%F`, never estimated.
-3. `STATUS.md`: last update date, progress and counts, remove from `In progress`, add on top of `Recently completed` (keep the last 10), recompute `Next ready items` (Todo items whose dependencies are all `Done`, by priority), update phase, keep notes short.
-4. After your edits, count the item states mechanically and check them against `STATUS.md` (`docs/PROCESS.md` §7): state table, progress, `In progress`, `Blocked` and `Next ready items`. Also check module assignments. Fix and report any inconsistency.
+2. `backlog done <ID> --outcome "<what was delivered and verified>"`: it sets the state and the closing date.
+3. `backlog check`: fix and report any inconsistency.
 
 ## 4. Commit
 
