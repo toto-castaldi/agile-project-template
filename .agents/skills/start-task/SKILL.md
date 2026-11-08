@@ -14,7 +14,7 @@ Rules: `docs/PROCESS.md` §4, §6, §7 and `AGENTS.md`. `backlog` is `python3 .a
 3. All dependencies are `Done`. If not, stop and report which are missing; continue only if the user explicitly asks, passing the reason to `backlog start --override-dependencies`.
 4. The working tree is clean. If not, stop and ask how to handle the pending changes.
 5. If `AGENTS.md` still shows "Template not initialized", only `TEC-001` can be started: use the `kickoff` skill.
-6. Shared claims (`docs/PROCESS.md` §6.4) are on only if `AGENTS.md` §10 sets `Shared claims` to `on`. If they are on and `git remote` lists no `origin`, report that claims cannot be shared and continue with them off.
+6. Shared claims (`docs/PROCESS-PARALLEL.md` §1) are on only if `AGENTS.md` §10 sets `Shared claims` to `on`. If they are on and `git remote` lists no `origin`, report that claims cannot be shared and continue with them off.
 7. With shared claims on and a `Todo` item: run `git fetch --prune origin` (if it fails, report and ask before continuing), then look for an existing branch of the same ID:
 
    ```bash

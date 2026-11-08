@@ -10,7 +10,7 @@ Rules: `docs/PROCESS.md` §6.3. `backlog` is `python3 .agents/tools/backlog.py`.
 
 ## 1. Checks
 
-1. Identify the branch and the item. If the branch exists only on `origin` (for example when another clone pushed it, `docs/PROCESS.md` §6.4–§6.5), run `git fetch --prune origin` and use `git switch <branch>` to create the local tracking branch. For item branches, the item must be `Done` **on that branch** (`backlog show <ID>`, run on the branch). If not, stop and suggest `finish-task`.
+1. Identify the branch and the item. If the branch exists only on `origin` (for example when another clone pushed it, `docs/PROCESS-PARALLEL.md`), run `git fetch --prune origin` and use `git switch <branch>` to create the local tracking branch. For item branches, the item must be `Done` **on that branch** (`backlog show <ID>`, run on the branch). If not, stop and suggest `finish-task`.
 2. The working tree is clean.
 3. Show the user what will be merged (`git log --oneline main..<branch>`) if they have not seen it yet.
 4. On the branch, check the item's records (`outcome`, closing date) and run `backlog check`. If something is wrong, stop before merging: report it and fix it with a commit on the item branch (with parallel work, ask its worker), never inside the merge commit.

@@ -36,6 +36,6 @@ The date in `CHANGELOG.md`, if any, is today's date from `date +%F` (`docs/PROCE
 
 Commit the remaining work and the record updates in the item branch with a Conventional Commit in the project language, e.g. `feat(US-004): <description>`. Make sure the working tree is clean afterwards.
 
-With shared claims on (`docs/PROCESS.md` §6.4: `AGENTS.md` §10 sets `Shared claims` to `on` and an `origin` remote exists), push the item branch: `git push -u origin <branch>`. If the push fails, keep the commit and report that the `Done` state is not shared.
+With shared claims on (`docs/PROCESS-PARALLEL.md` §1: `AGENTS.md` §10 sets `Shared claims` to `on` and an `origin` remote exists), push the item branch: `git push -u origin <branch>`. If the push fails, keep the commit and report that the `Done` state is not shared.
 
 Do **not** merge or push to `main`. Report to the user: summary, evidence per acceptance criterion, quality gate result, branch name, the push result when shared claims are on, and that `merge-task` can be run on their request.
