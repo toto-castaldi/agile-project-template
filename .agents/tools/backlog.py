@@ -37,15 +37,15 @@ ITEM_FIELDS = (
     "id", "title", "version", "epic", "module", "type", "priority", "status",
     "branch", "dependencies", "dependency_override", "requirements",
     "design_references", "description", "found_in", "steps_to_reproduce",
-    "expected", "actual", "acceptance_criteria", "blocked_by", "outcome",
+    "expected", "actual", "acceptance_criteria", "remarks", "blocked_by", "outcome",
     "closed_at",
 )
 ITEM_REQUIRED = (
-    "id", "title", "version", "epic", "type", "priority", "status",
+    "id", "title", "epic", "type", "priority", "status",
     "dependencies", "acceptance_criteria",
 )
-ITEM_LISTS = ("dependencies", "requirements", "design_references", "acceptance_criteria")
-VERSION_FIELDS = ("id", "goal", "state", "closed_at")
+ITEM_LISTS = ("dependencies", "requirements", "design_references", "acceptance_criteria", "remarks", "scope_changes")
+VERSION_FIELDS = ("id", "goal", "state", "closed_at", "scope_changes")
 VERSION_REQUIRED = ("id", "goal", "state")
 EPIC_FIELDS = ("id", "title", "scope")
 EPIC_REQUIRED = ("id", "title", "scope")
@@ -55,6 +55,8 @@ EPIC_ID = re.compile(r"^EPIC-\d{3,}$")
 MODULE_ID = re.compile(r"^MOD-\d{3,}$")
 VERSION_ID = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 REQUIREMENT_ID = re.compile(r"^REQ-[A-Z0-9]+-\d+$")
+REQUIREMENT_IN_TEXT = re.compile(r"\bREQ-[A-Z0-9]+-\d+\b")
+SCOPE_CHANGE_LINE = re.compile(r"^\*\*Scope change \((\d{4}-\d{2}-\d{2})\):\*\*\s*(.+)$")
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 SLUG = r"[a-z0-9]+(?:-[a-z0-9]+)*"
 
@@ -281,10 +283,10 @@ def check_item(store: Store, iid: str, item: dict, docs: dict, errors) -> None:
         errors.append((iid, f"type must be {TYPES[prefix][0]!r}"))
     if item.get("priority") not in PRIORITIES:
         errors.append((iid, f"invalid priority {item.get('priority')!r}"))
-    if not item.get("acceptance_criteria"):
+    if not item.get("acceptance_criteria") and item.get("version"):
         errors.append((iid, "acceptance_criteria is empty"))
     version_id = item.get("version")
-    if version_id not in store.versions:
+    if version_id not in (None, "") and version_id not in store.versions:
         errors.append((iid, f"unknown version {version_id!r}"))
     if item.get("epic") not in store.epics:
         errors.append((iid, f"unknown epic {item.get('epic')!r}"))
@@ -310,7 +312,7 @@ def check_module(iid, item, docs, errors) -> None:
 
 def check_requirements(iid, item, prefix, docs, errors) -> None:
     requirements = item.get("requirements") or []
-    if prefix in ("US", "BUG") and not requirements:
+    if prefix in ("US", "BUG") and not requirements and item.get("version"):
         errors.append((iid, "a User Story or Bug needs at least one requirement"))
     if not isinstance(requirements, list):
         return
@@ -627,6 +629,9 @@ def item_lines(item: dict) -> list[str]:
             lines.append(f"- **{label}:** {', '.join(value) if isinstance(value, list) else value}")
     lines.append("- **Acceptance criteria:**")
     lines.extend(f"  - {criterion}" for criterion in item.get("acceptance_criteria", []))
+    if item.get("remarks"):
+        lines.append("- **Remarks:**")
+        lines.extend(f"  - {remark}" for remark in item["remarks"])
     if item.get("blocked_by"):
         lines.append(f"- **Blocked by:** {item['blocked_by']}")
     if item.get("outcome"):
@@ -664,6 +669,7 @@ def cmd_export(store: Store, args) -> int:
         if version.get("closed_at"):
             state = f"{state} ({version['closed_at']})"
         out += ["", f"## Version {vid}", "", f"**State:** {state}", "", f"**Goal:** {version.get('goal')}"]
+        out += [f"\n**Scope change:** {change}" for change in version.get("scope_changes", [])]
         items = [i for i in store.items.values() if i.get("version") == vid]
         for eid in sorted({i.get("epic") for i in items}, key=str):
             epic = store.epics.get(eid, {})
@@ -672,7 +678,10 @@ def cmd_export(store: Store, args) -> int:
                 out += ["", f"#### {item['id']} — {item.get('title')}", "", *item_lines(item)]
     _, ideas = read_bullets(store.base / "IDEAS.md")
     out += ["", "## Unassigned backlog", ""]
-    out += [f"- {idea}" for idea in ideas] or ["None."]
+    unassigned = sorted((i for i in store.items.values() if not i.get("version")), key=lambda i: item_key(i["id"]))
+    out += [f"- {idea}" for idea in ideas] or ([] if unassigned else ["None."])
+    for item in unassigned:
+        out += ["", f"#### {item['id']} — {item.get('title')}", "", *item_lines(item)]
     print("\n".join(out))
     return 0
 
@@ -719,10 +728,14 @@ def apply_item_arguments(item: dict, args) -> None:
             item[field] = value
     if args.criterion is not None:
         item["acceptance_criteria"] = args.criterion
+    if args.remark is not None:
+        item["remarks"] = args.remark
 
 
 def cmd_add(store: Store, args) -> int:
     store.require_loaded()
+    if bool(args.version) == args.unassigned:
+        raise BacklogError("pass exactly one of --version and --unassigned")
     prefix = args.type
     item = {
         "id": store.next_id(prefix), "type": TYPES[prefix][0], "status": "Todo",
@@ -760,6 +773,8 @@ def cmd_start(store: Store, args) -> int:
     store.require_loaded()
     item = dict(store.item(args.id))
     require_status(item, ("Todo",), "start")
+    if not item.get("version"):
+        raise BacklogError(f"{item['id']} has no version: assign one with edit before starting it")
     missing = [
         d for d in item.get("dependencies", [])
         if store.items.get(d, {}).get("status") != "Done"
@@ -865,7 +880,12 @@ def cmd_version_edit(store: Store, args) -> int:
     store.require_loaded()
     if args.id not in store.versions:
         raise BacklogError(f"version {args.id} not found")
-    save(store, "versions", {**store.versions[args.id], "goal": args.goal})
+    version = dict(store.versions[args.id])
+    if args.goal is not None:
+        version["goal"] = args.goal
+    if args.scope_change is not None:
+        version["scope_changes"] = [*version.get("scope_changes", []), f"{today()}: {' '.join(args.scope_change.split())}"]
+    save(store, "versions", version)
     print(args.id)
     return 0
 
@@ -941,6 +961,7 @@ class BacklogImport:
         self.ideas: list[str] = []
         self.source_counts: dict[str, dict[str, int]] = {}
         self.item_lines: dict[str, int] = {}
+        self.remarks: list[str] = []
         self.version = self.epic = self.item = None
         self.field: str | None = None
         self.section = "top"
@@ -960,10 +981,13 @@ class BacklogImport:
             self.parse_heading(number, line)
         elif self.section == "skip":
             pass
-        elif self.section == "ideas":
-            self.parse_idea(number, line)
         elif self.item is not None:
             self.parse_item_line(number, line)
+        elif self.section == "ideas":
+            self.parse_idea(number, line)
+        elif SCOPE_CHANGE_LINE.match(line) and self.version is not None:
+            found = SCOPE_CHANGE_LINE.match(line)
+            self.version.setdefault("scope_changes", []).append(f"{found[1]}: {found[2].strip()}")
         elif self.epic is not None:
             self.parse_labeled(number, line, self.epic, "scope", "**Scope:**")
         elif self.version is not None:
@@ -981,7 +1005,7 @@ class BacklogImport:
             self.parse_section(number, title)
         elif level == 3 and self.section == "version":
             self.parse_epic(number, title)
-        elif level == 4 and self.section == "version" and self.epic is not None:
+        elif level == 4 and (self.section == "ideas" or (self.section == "version" and self.epic is not None)):
             self.parse_item_heading(number, title)
         elif self.section != "skip":
             self.problem(number, f"unexpected heading: {shorten(line)}")
@@ -999,6 +1023,7 @@ class BacklogImport:
             self.source_counts[match[1]] = {}
         elif lowered == "unassigned backlog":
             self.section = "ideas"
+            self.source_counts[None] = {}
         elif lowered in IMPORT_SKIPPED_SECTIONS:
             self.section = "skip"
             self.skipped.append(title)
@@ -1028,9 +1053,10 @@ class BacklogImport:
         if match[1] in self.store.items:
             self.problem(number, f"item {match[1]} appears twice")
         self.item = {
-            "id": match[1], "title": match[2], "version": self.version["id"], "epic": self.epic["id"],
-            "dependencies": [], "acceptance_criteria": [],
+            "id": match[1], "title": match[2], "dependencies": [], "acceptance_criteria": [],
         }
+        if self.section == "version":
+            self.item.update(version=self.version["id"], epic=self.epic["id"])
         self.store.items[match[1]] = self.item
         self.item_lines[match[1]] = number
 
@@ -1084,12 +1110,40 @@ class BacklogImport:
         elif label in IMPORT_TEXT:
             self.field = IMPORT_TEXT[label]
             self.item[self.field] = value
+        elif label == "requirements" and self.section == "ideas":
+            self.parse_unassigned_requirements(value)
         elif label in IMPORT_LISTS:
             self.item[IMPORT_LISTS[label]] = self.parse_list(value)
+        elif label == "version":
+            self.parse_version_field(number, value)
         elif label in IMPORT_PLAIN:
             self.parse_plain(number, IMPORT_PLAIN[label], value)
         else:
-            self.problem(number, f"unknown field {match[1].strip()!r} in {self.item['id']}")
+            self.add_remark(match[1].strip(), value)
+
+    def add_remark(self, label: str, value: str) -> None:
+        """Keep a field the format does not have, with its label, so that nothing is lost."""
+        self.item.setdefault("remarks", []).append(f"{label}: {value}")
+        self.field = "remarks"
+        self.remarks.append(f"{self.item['id']}: {label}")
+
+    def parse_unassigned_requirements(self, value: str) -> None:
+        """An unassigned item may have open requirements: keep the IDs and the original text."""
+        tokens = self.parse_list(value)
+        if all(REQUIREMENT_ID.match(token) for token in tokens):
+            self.item["requirements"] = tokens
+            return
+        self.item["requirements"] = REQUIREMENT_IN_TEXT.findall(value)
+        self.add_remark("Requirements", value)
+        self.field = None
+
+    def parse_version_field(self, number: int, value: str) -> None:
+        value = value.strip("`")
+        if self.section == "ideas":
+            if VERSION_ID.match(value):
+                self.problem(number, f"{self.item['id']} is unassigned but its Version field says {value}")
+        elif value != self.item["version"]:
+            self.problem(number, f"{self.item['id']} is under {self.item['version']} but its Version field says {value}")
 
     @staticmethod
     def parse_list(value: str) -> list[str]:
@@ -1109,7 +1163,7 @@ class BacklogImport:
             value = match[1]
         elif field in ("epic", "module"):
             value = value.split()[0]
-        if field == "epic" and value != self.item["epic"]:
+        if field == "epic" and self.section == "version" and value != self.item["epic"]:
             self.problem(number, f"{self.item['id']} is under {self.item['epic']} but its Epic field says {value}")
             return
         self.item[field] = value
@@ -1124,6 +1178,8 @@ class BacklogImport:
                 criteria[-1] += f" {text[2:].strip() if text.startswith('- ') else text}"
             else:
                 self.problem(number, f"unrecognized line in {self.item['id']}: {shorten(line)}")
+        elif self.field == "remarks":
+            self.item["remarks"][-1] += f"\n{text}"
         elif self.field in IMPORT_TEXT.values():
             self.item[self.field] = f"{self.item[self.field]}\n{text}".strip()
         else:
@@ -1144,7 +1200,8 @@ class BacklogImport:
         for line in text.splitlines():
             if line.startswith("## "):
                 match = re.match(r"^## Version (v\S+)$", line.rstrip())
-                counts = self.source_counts.get(match[1]) if match else None
+                unassigned = line.strip().lower() == "## unassigned backlog"
+                counts = self.source_counts.get(match[1]) if match else self.source_counts.get(None) if unassigned else None
             found = re.search(r"\*\*Status:\*\*\s*([A-Za-z ]*[A-Za-z])", line)
             if found and counts is not None:
                 counts[found[1]] = counts.get(found[1], 0) + 1
@@ -1175,7 +1232,7 @@ def compare_counts(importer: BacklogImport) -> list[str]:
     for version_id, expected in importer.source_counts.items():
         actual = state_counts(importer.store, version_id)
         if expected != actual:
-            differences.append(f"{version_id}: source {expected}, imported {actual}")
+            differences.append(f"{version_id or 'unassigned'}: source {expected}, imported {actual}")
     return differences
 
 
@@ -1216,6 +1273,10 @@ def cmd_import_md(store: Store, args) -> int:
 
     for version_id in sorted(store.versions, key=version_key):
         print(f"{version_id}: {state_counts(store, version_id)}")
+    if state_counts(store, None):
+        print(f"unassigned: {state_counts(store, None)}")
+    for remark in importer.remarks:
+        print(f"kept as remark: {remark}")
     print(f"{len(store.items)} items, {len(store.epics)} epics, {len(importer.ideas)} ideas, {len(notes)} notes")
     if args.dry_run:
         print("dry run: nothing was written")
@@ -1242,7 +1303,7 @@ def cmd_import_md(store: Store, args) -> int:
 
 def add_item_options(parser: argparse.ArgumentParser, creating: bool) -> None:
     parser.add_argument("--title", required=creating)
-    parser.add_argument("--version", required=creating)
+    parser.add_argument("--version", help="an empty value on edit makes the item unassigned")
     parser.add_argument("--epic", required=creating)
     parser.add_argument("--priority", required=creating, choices=None if not creating else PRIORITIES)
     parser.add_argument("--module")
@@ -1258,6 +1319,7 @@ def add_item_options(parser: argparse.ArgumentParser, creating: bool) -> None:
         "--criterion", action="append", required=creating,
         help="acceptance criterion, repeatable; with edit the given list replaces the existing one",
     )
+    parser.add_argument("--remark", action="append", help="free remark, repeatable; with edit the given list replaces the existing one")
 
 
 def reading(subparsers, name: str, handler, help_text: str, branches: bool = True):
@@ -1310,6 +1372,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     add = writing(commands, "add", cmd_add, "create an item and assign its ID")
     add.add_argument("--type", required=True, choices=list(TYPES))
+    add.add_argument("--unassigned", action="store_true", help="no version yet: the item cannot start until it has one")
     add_item_options(add, creating=True)
     edit = writing(commands, "edit", cmd_edit, "change the fields of an item; an empty value clears an optional field")
     edit.add_argument("id")
@@ -1340,9 +1403,10 @@ def build_parser() -> argparse.ArgumentParser:
     version_add.add_argument("--planned", action="store_true", help="a future version, not open yet")
     version_open = writing(version, "open", cmd_version_open, "Planned to Open")
     version_open.add_argument("id")
-    version_edit = writing(version, "edit", cmd_version_edit, "change the goal")
+    version_edit = writing(version, "edit", cmd_version_edit, "change the goal or record a scope change")
     version_edit.add_argument("id")
-    version_edit.add_argument("--goal", required=True)
+    version_edit.add_argument("--goal")
+    version_edit.add_argument("--scope-change", dest="scope_change", metavar="TEXT", help="appended with today's date")
 
     epic = commands.add_parser("epic", help="epic records").add_subparsers(dest="action", required=True)
     epic_add = writing(epic, "add", cmd_epic_add, "create an epic and assign its ID")

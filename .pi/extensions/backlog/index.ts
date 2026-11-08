@@ -166,6 +166,7 @@ function toBacklogItem(record: BacklogRecord, lookup: Lookup): BacklogItem {
 		else if (field === "dependencies") body.push("- **Dependencies:** none");
 	}
 	body.push("- **Acceptance criteria:**", ...strings(record.acceptance_criteria).map((c) => `  - ${c}`));
+	if (strings(record.remarks).length > 0) body.push("- **Remarks:**", ...strings(record.remarks).map((r) => `  - ${r}`));
 	if (record.blocked_by) body.push(`- **Blocked by:** ${String(record.blocked_by)}`);
 	if (record.outcome) body.push(`- **Outcome:** ${String(record.outcome)} (${String(record.closed_at)})`);
 
@@ -204,7 +205,7 @@ function loadBacklog(cwd: string): LoadResult {
 	}
 	const lookup = { versions: byId(store.versions), epics: byId(store.epics) };
 	const order = (a: string | undefined, b: string | undefined) =>
-		(a ?? "").localeCompare(b ?? "", undefined, { numeric: true });
+		(a ?? "\uffff").localeCompare(b ?? "\uffff", undefined, { numeric: true });
 	const items = store.items
 		.map((record) => toBacklogItem(record, lookup))
 		.sort((a, b) => order(a.version, b.version) || order(a.epic, b.epic));

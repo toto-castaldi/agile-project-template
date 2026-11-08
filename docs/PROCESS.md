@@ -41,8 +41,8 @@ If `AGENTS.md` §10 turns on `Shared claims` or `Parallel work`, read `docs/PROC
 
 - Semantic Versioning, starting at `v0.1.0`. States: `Planned`, `Open`, `Closed`. Only one version is `Open`, unless a patch version is opened to fix bugs in a closed one.
 - All items assigned to a version are required for it, regardless of priority.
-- Changing the scope of an open version must be agreed with the user and recorded in `backlog/`.
-- Ideas not assigned to a version are recorded with `backlog ideas --add`, one line each, without an ID. They need requirements before they can be designed.
+- Changing the scope of an open version must be agreed with the user and recorded in `backlog/` (`backlog version edit --scope-change`).
+- Ideas not assigned to a version are recorded with `backlog ideas --add`, one line each, without an ID. An item with full fields may stay without a version (`backlog add --unassigned`): it is never ready and cannot start until it has one. Both need requirements before they can be designed, and an item needs acceptance criteria before it gets a version.
 
 ### 4.2 Epics
 
@@ -65,8 +65,9 @@ Thematic containers (`EPIC-001`) with a title and a scope. No state, acceptance 
 
 `backlog add --help`, `backlog edit --help` and `backlog show` give the fields; the CLI rejects invalid records.
 
-- Every User Story and Bug references at least one requirement. Technical items reference the design or process sections they produce or change.
+- Every User Story and Bug assigned to a version references at least one requirement. Technical items reference the design or process sections they produce or change.
 - Acceptance criteria are concrete and verifiable. Avoid wording such as "works well".
+- `remarks` holds information that fits no other field, such as a later decision about the item.
 - `module` is optional and independent of the epic; it need not be a Git submodule. Do not invent one: it must be in `docs/TECHNICAL-DESIGN.md` §3, with a stable ID (`MOD-001`), sequential and never reused, a name, a responsibility and its location when known.
 - Dates in `backlog/` come from the CLI. Dates in `CHANGELOG.md` are read with `date +%F`. Never estimate or infer a date.
 
