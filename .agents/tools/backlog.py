@@ -162,6 +162,10 @@ class Store:
 
     def next_id(self, prefix: str) -> str:
         numbers = [int(m[2]) for m in map(ITEM_ID.match, self.items) if m and m[1] == prefix]
+        # An imported idea may already carry an ID: never hand it out again.
+        ideas = self.base / "IDEAS.md"
+        if ideas.exists():
+            numbers += [int(n) for n in re.findall(rf"\b{prefix}-(\d{{3,}})\b", ideas.read_text(encoding="utf-8"))]
         return f"{prefix}-{max(numbers, default=0) + 1:03d}"
 
     def next_epic_id(self) -> str:
@@ -907,6 +911,332 @@ def cmd_close_version(store: Store, args) -> int:
     return 0
 
 
+# --- Migration from BACKLOG.md ----------------------------------------------
+
+IMPORT_TEXT = {
+    "description": "description", "found in": "found_in", "steps to reproduce": "steps_to_reproduce",
+    "expected": "expected", "actual": "actual", "blocked by": "blocked_by", "outcome": "outcome",
+    "dependency override": "dependency_override",
+}
+IMPORT_LISTS = {"dependencies": "dependencies", "requirements": "requirements", "design references": "design_references"}
+IMPORT_PLAIN = {"type": "type", "priority": "priority", "status": "status", "branch": "branch", "epic": "epic", "module": "module"}
+IMPORT_SKIPPED_SECTIONS = ("management", "dependencies and suggested order")
+EMPTY_VALUES = ("none", "-", "—", "n/a")
+FIELD_LINE = re.compile(r"^- \*\*[^*:]+:\*\*")
+FIELD_PART = re.compile(r"\s*·\s*(?=\*\*[^*:]+:\*\*)")
+HEADING_ID = re.compile(r"^(\S+) — (.+)$")
+OLD_STATUS = re.compile(r"^(Todo|In Progress|Blocked|Done|Dropped)(?:\s*\(.*\))?$")
+IDEAS_INTRO = "Ideas not assigned to any version. They need requirements before they can be designed."
+DATE_IN_TEXT = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+
+
+class BacklogImport:
+    """Parses a hand-written BACKLOG.md by its structural labels; never guesses."""
+
+    def __init__(self, store: Store, source: str):
+        self.store = store
+        self.source = source
+        self.problems: list[tuple[int, str]] = []
+        self.skipped: list[str] = []
+        self.ideas: list[str] = []
+        self.source_counts: dict[str, dict[str, int]] = {}
+        self.item_lines: dict[str, int] = {}
+        self.version = self.epic = self.item = None
+        self.field: str | None = None
+        self.section = "top"
+
+    def problem(self, number: int, message: str) -> None:
+        self.problems.append((number, message))
+
+    def parse(self, text: str) -> None:
+        for number, raw in enumerate(text.splitlines(), 1):
+            line = raw.rstrip()
+            if line.strip():
+                self.parse_line(number, line)
+        self.finish()
+
+    def parse_line(self, number: int, line: str) -> None:
+        if line.startswith("#"):
+            self.parse_heading(number, line)
+        elif self.section == "skip":
+            pass
+        elif self.section == "ideas":
+            self.parse_idea(number, line)
+        elif self.item is not None:
+            self.parse_item_line(number, line)
+        elif self.epic is not None:
+            self.parse_labeled(number, line, self.epic, "scope", "**Scope:**")
+        elif self.version is not None:
+            self.parse_version_line(number, line)
+        else:
+            self.problem(number, f"unrecognized line: {shorten(line)}")
+
+    def parse_heading(self, number: int, line: str) -> None:
+        level = len(line) - len(line.lstrip("#"))
+        title = line[level:].strip()
+        self.item = self.field = None
+        if level == 1:
+            return
+        if level == 2:
+            self.parse_section(number, title)
+        elif level == 3 and self.section == "version":
+            self.parse_epic(number, title)
+        elif level == 4 and self.section == "version" and self.epic is not None:
+            self.parse_item_heading(number, title)
+        elif self.section != "skip":
+            self.problem(number, f"unexpected heading: {shorten(line)}")
+
+    def parse_section(self, number: int, title: str) -> None:
+        self.version = self.epic = None
+        match = re.match(r"^Version (v\S+)$", title)
+        lowered = title.lower()
+        if match:
+            self.section = "version"
+            self.version = {"id": match[1]}
+            if match[1] in self.store.versions:
+                self.problem(number, f"version {match[1]} appears twice")
+            self.store.versions[match[1]] = self.version
+            self.source_counts[match[1]] = {}
+        elif lowered == "unassigned backlog":
+            self.section = "ideas"
+        elif lowered in IMPORT_SKIPPED_SECTIONS:
+            self.section = "skip"
+            self.skipped.append(title)
+        else:
+            self.section = "skip"
+            self.problem(number, f"unknown section: {shorten(title)}")
+
+    def parse_epic(self, number: int, title: str) -> None:
+        match = HEADING_ID.match(title)
+        if not match or not EPIC_ID.match(match[1]):
+            self.epic = None
+            self.section = "skip"
+            self.problem(number, f"cannot read the epic heading: {shorten(title)}")
+            return
+        known = self.store.epics.get(match[1])
+        if known and known["title"] != match[2]:
+            self.problem(number, f"{match[1]} has two different titles")
+        self.epic = known or {"id": match[1], "title": match[2]}
+        self.epic_seen_scope = False
+        self.store.epics[match[1]] = self.epic
+
+    def parse_item_heading(self, number: int, title: str) -> None:
+        match = HEADING_ID.match(title)
+        if not match or not ITEM_ID.match(match[1]):
+            self.problem(number, f"cannot read the item heading: {shorten(title)}")
+            return
+        if match[1] in self.store.items:
+            self.problem(number, f"item {match[1]} appears twice")
+        self.item = {
+            "id": match[1], "title": match[2], "version": self.version["id"], "epic": self.epic["id"],
+            "dependencies": [], "acceptance_criteria": [],
+        }
+        self.store.items[match[1]] = self.item
+        self.item_lines[match[1]] = number
+
+    def parse_labeled(self, number: int, line: str, record: dict, field: str, label: str) -> None:
+        if not line.startswith(label):
+            self.problem(number, f"unrecognized line: {shorten(line)}")
+            return
+        value = line[len(label):].strip()
+        if record.get(field) not in (None, value):
+            self.problem(number, f"{record['id']} has two different values for {field}")
+        record[field] = value
+
+    def parse_version_line(self, number: int, line: str) -> None:
+        if line.startswith("**State:**"):
+            value = line[len("**State:**"):].strip()
+            match = re.match(r"^(Open|Closed|Planned)\b(.*)$", value)
+            if not match:
+                self.problem(number, f"unknown version state: {shorten(value)}")
+                return
+            self.version["state"] = match[1]
+            date = DATE_IN_TEXT.search(match[2])
+            if date:
+                self.version["closed_at"] = date[0]
+        else:
+            self.parse_labeled(number, line, self.version, "goal", "**Goal:**")
+
+    def parse_idea(self, number: int, line: str) -> None:
+        if line == IDEAS_INTRO:
+            return
+        if not line.startswith("- "):
+            self.problem(number, f"unrecognized line: {shorten(line)}")
+        elif line[2:].strip() != "`<idea>`":
+            self.ideas.append(line[2:].strip())
+
+    def parse_item_line(self, number: int, line: str) -> None:
+        if FIELD_LINE.match(line):
+            for part in FIELD_PART.split(line[2:]):
+                self.parse_field(number, part)
+        elif line.startswith("  "):
+            self.parse_continuation(number, line)
+        else:
+            self.field = None
+            self.problem(number, f"unrecognized line in {self.item['id']}: {shorten(line)}")
+
+    def parse_field(self, number: int, part: str) -> None:
+        match = re.match(r"^\*\*([^*:]+):\*\*\s*(.*)$", part)
+        label, value = match[1].strip().lower(), match[2].strip()
+        self.field = None
+        if label == "acceptance criteria":
+            self.field = "acceptance_criteria"
+        elif label in IMPORT_TEXT:
+            self.field = IMPORT_TEXT[label]
+            self.item[self.field] = value
+        elif label in IMPORT_LISTS:
+            self.item[IMPORT_LISTS[label]] = self.parse_list(value)
+        elif label in IMPORT_PLAIN:
+            self.parse_plain(number, IMPORT_PLAIN[label], value)
+        else:
+            self.problem(number, f"unknown field {match[1].strip()!r} in {self.item['id']}")
+
+    @staticmethod
+    def parse_list(value: str) -> list[str]:
+        if value.lower() in EMPTY_VALUES:
+            return []
+        return [part.strip().strip("`") for part in value.split(",") if part.strip()]
+
+    def parse_plain(self, number: int, field: str, value: str) -> None:
+        value = value.strip("`")
+        if value.lower() in EMPTY_VALUES:
+            return
+        if field == "status":
+            match = OLD_STATUS.match(value)
+            if not match:
+                self.problem(number, f"unknown status {shorten(value)!r} in {self.item['id']}")
+                return
+            value = match[1]
+        elif field in ("epic", "module"):
+            value = value.split()[0]
+        if field == "epic" and value != self.item["epic"]:
+            self.problem(number, f"{self.item['id']} is under {self.item['epic']} but its Epic field says {value}")
+            return
+        self.item[field] = value
+
+    def parse_continuation(self, number: int, line: str) -> None:
+        text = line.strip()
+        if self.field == "acceptance_criteria":
+            criteria = self.item["acceptance_criteria"]
+            if line.startswith("  - "):
+                criteria.append(text[2:].strip())
+            elif criteria:
+                criteria[-1] += f" {text[2:].strip() if text.startswith('- ') else text}"
+            else:
+                self.problem(number, f"unrecognized line in {self.item['id']}: {shorten(line)}")
+        elif self.field in IMPORT_TEXT.values():
+            self.item[self.field] = f"{self.item[self.field]}\n{text}".strip()
+        else:
+            self.problem(number, f"unrecognized line in {self.item['id']}: {shorten(line)}")
+
+    def finish(self) -> None:
+        for iid, item in self.store.items.items():
+            if item.get("status") in ("Done", "Dropped"):
+                dates = DATE_IN_TEXT.findall(item.get("outcome", ""))
+                if dates:
+                    item["closed_at"] = dates[-1]
+                else:
+                    self.problem(self.item_lines[iid], f"{iid} is {item['status']} but its Outcome has no date YYYY-MM-DD")
+
+    def count_source(self, text: str) -> None:
+        """Count states with a plain text scan, independent of the parser."""
+        counts = None
+        for line in text.splitlines():
+            if line.startswith("## "):
+                match = re.match(r"^## Version (v\S+)$", line.rstrip())
+                counts = self.source_counts.get(match[1]) if match else None
+            found = re.search(r"\*\*Status:\*\*\s*([A-Za-z ]*[A-Za-z])", line)
+            if found and counts is not None:
+                counts[found[1]] = counts.get(found[1], 0) + 1
+
+
+def read_status_notes(path: Path) -> tuple[list[str], list[str]]:
+    """Return the bullets of the Notes section of STATUS.md and its unrecognized lines."""
+    if not path.exists():
+        return [], []
+    notes, unknown, inside = [], [], False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("## "):
+            inside = line.strip().lower() == "## notes"
+        elif inside and line.startswith("- "):
+            notes.append(line[2:].strip())
+        elif inside and line.strip() and line.strip().rstrip(".").lower() != "none":
+            unknown.append(line.strip())
+    return notes, unknown
+
+
+def state_counts(store: Store, version_id: str) -> dict[str, int]:
+    counts = progress(store, version_id)["counts"]
+    return {state: count for state, count in counts.items() if count}
+
+
+def compare_counts(importer: BacklogImport) -> list[str]:
+    differences = []
+    for version_id, expected in importer.source_counts.items():
+        actual = state_counts(importer.store, version_id)
+        if expected != actual:
+            differences.append(f"{version_id}: source {expected}, imported {actual}")
+    return differences
+
+
+def text_file(title: str, bullets: list[str]) -> str:
+    body = "".join(f"- {' '.join(bullet.split())}\n" for bullet in bullets)
+    return f"# {title}\n" + (f"\n{body}" if body else "")
+
+
+def cmd_import_md(store: Store, args) -> int:
+    store.require_loaded()
+    if store.items or store.versions or store.epics:
+        raise BacklogError("backlog/ already contains records: import only into an empty store")
+    source = args.source or store.root / "BACKLOG.md"
+    status = args.status or store.root / "STATUS.md"
+    if not source.exists():
+        raise BacklogError(f"{source} not found")
+    text = source.read_text(encoding="utf-8")
+    importer = BacklogImport(store, str(source))
+    importer.parse(text)
+    importer.count_source(text)
+    notes, unknown_notes = read_status_notes(status)
+
+    unrecognized = [f"{source.name}:{number}: {message}" for number, message in sorted(importer.problems)]
+    unrecognized += [f"{status.name}: unrecognized line in Notes: {shorten(line)}" for line in unknown_notes]
+    blocking = [] if args.skip_unrecognized else list(unrecognized)
+    blocking += [f"{where}: {message}" for where, message in validate(store)]
+    blocking += [f"state counts differ, {difference}" for difference in compare_counts(importer)]
+    if importer.problems and args.skip_unrecognized:
+        for message in unrecognized:
+            print(f"skipped: {message}")
+    for section in importer.skipped:
+        print(f"ignored section: {section}")
+    if blocking:
+        for message in blocking:
+            print(message)
+        print(f"import refused: {len(blocking)} problem(s), nothing was written")
+        return 1
+
+    for version_id in sorted(store.versions, key=version_key):
+        print(f"{version_id}: {state_counts(store, version_id)}")
+    print(f"{len(store.items)} items, {len(store.epics)} epics, {len(importer.ideas)} ideas, {len(notes)} notes")
+    if args.dry_run:
+        print("dry run: nothing was written")
+        return 0
+
+    for kind in Store.KINDS:
+        for record in getattr(store, kind).values():
+            store.write(kind, record)
+    write_atomic(store.base / "NOTES.md", text_file("Notes", notes))
+    write_atomic(store.base / "IDEAS.md", text_file("Unassigned ideas", importer.ideas))
+    written = Store(store.root)
+    errors = validate(written)
+    for where, message in errors:
+        print(f"{where}: {message}")
+    if errors:
+        print("import written but check failed: review backlog/")
+        return 1
+    print(f"check OK. Review backlog/, then delete {source.name} and {status.name}.")
+    return 0
+
+
 # --- Command line -----------------------------------------------------------
 
 
@@ -1022,6 +1352,14 @@ def build_parser() -> argparse.ArgumentParser:
     epic_edit.add_argument("id")
     epic_edit.add_argument("--title")
     epic_edit.add_argument("--scope")
+
+    importer = writing(commands, "import-md", cmd_import_md, "migrate a BACKLOG.md into an empty store")
+    importer.add_argument("--from", dest="source", type=Path, help="default: BACKLOG.md of the project")
+    importer.add_argument("--status", type=Path, help="source of the notes; default: STATUS.md of the project")
+    importer.add_argument("--dry-run", action="store_true", help="validate and report, write nothing")
+    importer.add_argument(
+        "--skip-unrecognized", action="store_true", help="import anyway, listing the lines that are left out",
+    )
 
     close = writing(commands, "close-version", cmd_close_version, "close a version whose items are finished")
     close.add_argument("id")
