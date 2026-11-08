@@ -13,7 +13,7 @@ Rules: `docs/PROCESS.md` §6.3, §6.4, §6.5 and `AGENTS.md` §10. Run only beca
 1. `AGENTS.md` §10 sets `Parallel work` to `on` and `Shared claims` to `on`, and `git remote` lists `origin`. Otherwise stop and report what is missing: parallel work is off.
 2. The current branch is `main`, the working tree is clean and `git pull --ff-only` succeeds. If not, stop and ask the user to resolve it; do not switch branches, stash or discard changes.
 3. If `AGENTS.md` still shows "Template not initialized", stop: only `kickoff` can run.
-4. Read the settings (defaults in brackets): `Workspace root` [`../<repo-name>-work`, relative to this clone], `Worker agent command` [`pi`].
+4. Read the settings (defaults in brackets): `Workspace root` [`../<repo-name>-work`, relative to this clone], `Worker agent command` [`pi --approve`].
 5. Tooling: Herdr mode if `command -v hc` succeeds and `hc get "$HC_TERMINAL_ID"` works (you run inside an hc terminal); otherwise manual mode. Tell the user which one is used.
 
 ## 2. Show the situation

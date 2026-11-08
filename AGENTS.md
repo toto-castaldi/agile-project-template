@@ -85,8 +85,8 @@ None.
 - **Shared claims:** `<on | off>`
 - **Parallel work:** `<on | off>`
 - **Workspace root:** `../<repo-name>-work`
-- **Worker agent command:** `pi`
+- **Worker agent command:** `pi --approve`
 
 With `Shared claims` `on`, item branches are pushed at every state change so that agents in other clones see which items are taken (`docs/PROCESS.md` §6.4). Requires an `origin` remote.
 
-With `Parallel work` `on`, the `orchestrate` skill runs several items at once: one worker agent per item, started with `Worker agent command` in its own clone under `Workspace root` (`docs/PROCESS.md` §6.5). Requires `Shared claims` `on`.
+With `Parallel work` `on`, the `orchestrate` skill runs several items at once: one worker agent per item, started with `Worker agent command` in its own clone under `Workspace root` (`docs/PROCESS.md` §6.5). Requires `Shared claims` `on`. Workers run unattended, so the command must start without interactive prompts: `--approve` makes pi trust the project-local files of the clone for that run only.
