@@ -48,7 +48,7 @@ Architecture and module boundaries: `<short description, details in TECHNICAL-DE
 
 ## 6. Quality gate
 
-The closing gate for items, merges and pushes to `main` runs only:
+The closing gate for items, merges and pushes of merges to `main` runs only (adding a backlog item is documentation only and needs no gate):
 
 ```bash
 <lint command>

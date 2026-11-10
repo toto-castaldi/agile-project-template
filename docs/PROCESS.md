@@ -98,7 +98,7 @@ Functional `REQ-<AREA>-NNN`, non-functional `REQ-NFR-NNN`. IDs are stable and ne
 
 - `main` is always releasable. Every item is developed in its own branch from an up-to-date `main`: `<prefix><ID>-<short-slug>`, slug in lowercase kebab-case. One item per branch.
 - A new item of any type is added only on a clean, up-to-date `main`, with `git pull --ff-only` when an upstream exists. If that is not the state, stop and ask the user; do not switch branches, stash or discard changes.
-- Each addition is exactly one documentation-only `docs(<ID>)` commit directly on `main`, with the new item and its requirements and design updates. No branch or merge; no push unless the user asks.
+- Each addition is exactly one documentation-only `docs(<ID>)` commit directly on `main`, with the new item and its requirements and design updates. No branch or merge. If `main` has an upstream, it must have no other unpushed commits before the addition, and the commit is pushed at once so that every clone sees it; a rejected push is rebased with `git pull --rebase`, checked with `backlog check` and pushed again, or reported on conflict. This is the only automatic push of `main`.
 - If an item branch reveals a new dependency, do not add that item there: preserve the work and ask the user to return to a clean `main`.
 - Other backlog grooming uses a `backlog/<short-slug>` branch, merged like an item branch, with commit type `docs` and the main item touched as scope. Release branches are `release/vX.Y.Z`.
 

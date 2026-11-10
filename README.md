@@ -80,9 +80,9 @@ docs/spikes/               spike reports
 - Item types: User Story `US-NNN`, Task `TEC-NNN`, Spike `SPIKE-NNN`, Bug `BUG-NNN`, grouped by thematic epics `EPIC-NNN`. Items may also reference an optional project module `MOD-NNN` defined in the technical design; modules need not be Git submodules.
 - States: `Todo`, `In Progress`, `Blocked`, `Done`, `Dropped`. Priorities: `P0`, `P1`, `P2`. No sprints, no estimates.
 - The status of the project is computed on request (`python3 .agents/tools/backlog.py status`); agents read and change the backlog only through that CLI.
-- Add each new backlog item directly on a clean, up-to-date `main` in one documentation-only commit; no branch, merge or automatic push for the addition.
+- Add each new backlog item directly on a clean, up-to-date `main` in one documentation-only commit, pushed at once when `main` has an upstream; no branch or merge for the addition.
 - Develop items on `us/`, `task/`, `spike/` or `fix/` branches; use `backlog/` for other grooming and `release/` for releases. Merge `--no-ff` only on request.
-- Optional shared claims (`AGENTS.md` §10): for agents working in parallel clones, item branches are pushed at every state change and an item that already has a branch is not started again. `main` is still never pushed automatically.
+- Optional shared claims (`AGENTS.md` §10): for agents working in parallel clones, item branches are pushed at every state change and an item that already has a branch is not started again. `main` is pushed automatically only when an item is added.
 - Optional parallel work (`AGENTS.md` §10, requires shared claims): an orchestrator agent on `main` launches one worker agent per item, each in its own clone; each worker claims its item, proposes a plan and waits for your go. The orchestrator follows their reports without blocking, so you can keep planning with it while workers implement; it merges on request and removes merged clones. It uses Herdr (`hc`) when available, otherwise it prints the commands to start the workers.
 - Commits: `type(ID): description` in the project language.
 - Rules and structural labels in English; project content in the project language.

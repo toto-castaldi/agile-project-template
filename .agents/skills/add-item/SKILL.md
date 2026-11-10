@@ -9,7 +9,7 @@ Rules: `docs/PROCESS.md` §3, §4, §5, §6.1. The user's arguments describe the
 
 ## 1. Understand
 
-Before starting, verify that the current branch is `main` and the working tree is clean. If either check fails, stop and ask the user to resolve it; do not switch branches, stash or discard changes automatically. If `main` has an upstream, run `git pull --ff-only` before making changes; stop if it fails.
+Before starting, verify that the current branch is `main` and the working tree is clean. If either check fails, stop and ask the user to resolve it; do not switch branches, stash or discard changes automatically. If `main` has an upstream, run `git pull --ff-only` before making changes; stop if it fails. Then check that `main` has no local commits missing from its upstream (`git log --oneline @{u}..` is empty): the addition is pushed at the end and must not publish other work. If it is not empty, stop and ask the user to push or resolve those commits first.
 
 1. Run `backlog status` and `backlog list --limit 0`; read the relevant parts of `docs/REQUIREMENTS.md` and the module catalog, if any, in `docs/TECHNICAL-DESIGN.md` §3.
 2. Classify the work: `US` (value for an actor), `TEC` (technical), `SPIKE` (questions to answer), `BUG` (behavior contradicting requirements or acceptance criteria).
@@ -30,6 +30,10 @@ Add one item on `main`; do not create a branch. If the request arose on an item 
 3. **Backlog**: `backlog add --type <US|TEC|SPIKE|BUG> --title … --version … --epic … --priority … --criterion … [--dependencies …] [--requirements …] [--design-references …] [--module …] [--description …]`. It assigns the next free ID and refuses invalid items, so requirements and modules must already be recorded. Repeat `--criterion` for each verifiable criterion. Use `--module` only when a module was agreed. For bugs add `--found-in`, `--steps-to-reproduce`, `--expected`, `--actual` and a regression-test criterion. For an unassigned idea use `backlog ideas --add` instead: one line, no ID. If it already has full fields, use `backlog add --unassigned` instead of `--version`.
 4. Run `backlog check`; fix any inconsistency before committing.
 
-## 3. Commit
+## 3. Commit and push
 
-After checking consistency, `git diff --check` and `git diff --cached --check`, create exactly one commit on `main` containing the new item and all related requirements and design updates, without unrelated changes. Use the project language, e.g. `docs(US-014): <"add" + title>`. Report the new item and commit to the user. No merge is needed; do not push unless the user explicitly requests it.
+1. After checking consistency, `git diff --check` and `git diff --cached --check`, create exactly one commit on `main` containing the new item and all related requirements and design updates, without unrelated changes. Use the project language, e.g. `docs(US-014): <"add" + title>`. No merge is needed.
+2. If `main` has an upstream, push it at once (`git push`) so that every clone sees the backlog change. No quality gate is needed: the commit is documentation only. Skip the push if there is no upstream.
+3. If the push is rejected because the upstream moved, run `git pull --rebase`, then `backlog check`, and push again. If the rebase conflicts (for example another clone added the same ID) or the check fails, run `git rebase --abort` if a rebase is in progress, keep the local commit and stop: report that the item is not shared and ask the user how to proceed. Any other push failure: keep the commit and report it.
+
+Report to the user: the new item, the commit and the push result.
