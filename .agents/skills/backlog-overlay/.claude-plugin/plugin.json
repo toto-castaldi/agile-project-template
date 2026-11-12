@@ -1,0 +1,6 @@
+{
+  "name": "backlog-overlay",
+  "version": "1.0.0",
+  "description": "Read-only pane that shows the items of backlog/ one at a time (/backlog)",
+  "types": "./types/index.d.ts"
+}

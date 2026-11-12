@@ -2,6 +2,8 @@
 .pi/*
 !.pi/extensions/
 .claude/settings.local.json
+# Type declarations Claude Code writes beside the plugins it loads
+.agents/skills/*/.claude-plugin/types/
 
 # Local configuration and secrets
 .env
