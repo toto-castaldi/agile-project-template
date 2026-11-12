@@ -16,20 +16,16 @@
  * start as `Type: all · Priority: all · Status: Todo`, are kept in memory for
  * the rest of the pi session and reset when pi restarts or on /reload.
  *
- * Item branches: the backlog of the current directory is the base, read through
- * .agents/tools/backlog.py. Each item is replaced by its file on its item branch
- * (`us/`, `task/`, `spike/`, `fix/` + `<ID>-<slug>`, PROCESS §4.3 and §6.1), local or
- * remote-tracking, when that branch is not merged into local `main` or into a
- * remote's default branch. A local branch wins over the remote-tracking one
- * with the same name. On an item branch, its item keeps the working-tree copy
- * and the other branches of that ID are skipped. With several branches for
- * one ID, the one with the most recent commit wins and the header warns
- * `also in: …`. At every opening the overlay runs `git fetch --prune` (10 s
- * timeout) in the background and updates when it completes. Only git refs are
- * read and updated; files of the working tree are never written.
+ * Item branches: states are resolved by the backlog CLI
+ * (`export --json --branches`, rules in docs/PROCESS-PARALLEL.md §1): each item
+ * is shown as it is on its unmerged item branch, local or remote-tracking, and the
+ * header shows `from <ref>` and `also in: …`. The overlay opens at once with the
+ * current directory, then asks the CLI for the states from the local refs and,
+ * when the repository has a remote, for the states after `git fetch --prune`,
+ * updating as each answer arrives. Only git refs are updated; files of the
+ * working tree are never written.
  *
- * Project-agnostic: it relies only on the JSON output of the backlog CLI and on
- * the item files defined in docs/PROCESS.md §4.4.
+ * Project-agnostic: it relies only on the JSON output of the backlog CLI.
  * It never writes any file.
  */
 
@@ -47,8 +43,9 @@ import { matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@ea
 
 const BACKLOG_TOOL = join(".agents", "tools", "backlog.py");
 const DEFAULT_SHORTCUT = "ctrl+shift+b";
-const FETCH_TIMEOUT_MS = 10_000;
-const GIT_TIMEOUT_MS = 5_000;
+/** Reading the store; branch resolution with a fetch also waits for git (10 s fetch timeout in the CLI). */
+const READ_TIMEOUT_MS = 5_000;
+const BRANCHES_TIMEOUT_MS = 30_000;
 
 interface BacklogItem {
 	/** Heading text after `#### `, e.g. `US-001 — Title`. */
@@ -79,6 +76,18 @@ interface Lookup {
 }
 
 type LoadResult = { items: BacklogItem[]; lookup: Lookup } | { message: string };
+
+/** Output of `backlog export --json [--branches]`. */
+interface ExportedStore {
+	versions: BacklogRecord[];
+	epics: BacklogRecord[];
+	items: BacklogRecord[];
+	branches?: {
+		fetch: "done" | "failed" | "skipped" | "none";
+		remotes: string[];
+		items: Record<string, { source: string; also_in: string[] }>;
+	};
+}
 
 // ---------------------------------------------------------------------------
 // Filters (values and order from docs/PROCESS.md §4.3, §4.5, §4.6)
@@ -187,168 +196,74 @@ function byId(records: BacklogRecord[]): Map<string, BacklogRecord> {
 	return new Map(records.map((record) => [String(record.id), record]));
 }
 
+function readFailure(error: unknown): string {
+	const stderr = (error as { stderr?: unknown } | null)?.stderr;
+	return stderr ? String(stderr).trim() : error instanceof Error ? error.message : String(error);
+}
+
+/** Items in display order (by version, then epic), with the branch they were read from. */
+function toItems(store: ExportedStore, lookup: Lookup): BacklogItem[] {
+	const order = (a: string | undefined, b: string | undefined) =>
+		(a ?? "\uffff").localeCompare(b ?? "\uffff", undefined, { numeric: true });
+	return store.items
+		.map((record) => {
+			const item = toBacklogItem(record, lookup);
+			const origin = store.branches?.items[String(record.id)];
+			if (!origin) return item;
+			return { ...item, source: origin.source, alsoIn: origin.also_in.length > 0 ? origin.also_in : undefined };
+		})
+		.sort((a, b) => order(a.version, b.version) || order(a.epic, b.epic));
+}
+
+/** The backlog of the current directory, read synchronously so the overlay opens with it. */
 function loadBacklog(cwd: string): LoadResult {
 	if (!existsSync(join(cwd, BACKLOG_TOOL))) return { message: `${BACKLOG_TOOL} not found in ${cwd}.` };
-	let store: { versions: BacklogRecord[]; epics: BacklogRecord[]; items: BacklogRecord[] };
+	let store: ExportedStore;
 	try {
 		const output = execFileSync("python3", [join(cwd, BACKLOG_TOOL), "export", "--json"], {
+			cwd,
 			encoding: "utf8",
-			timeout: GIT_TIMEOUT_MS,
+			timeout: READ_TIMEOUT_MS,
 			maxBuffer: 32 * 1024 * 1024,
 			stdio: ["ignore", "pipe", "pipe"],
 		});
 		store = JSON.parse(output);
 	} catch (error) {
-		const stderr = (error as { stderr?: unknown }).stderr;
-		const detail = stderr ? String(stderr).trim() : error instanceof Error ? error.message : String(error);
-		return { message: `Cannot read the backlog: ${detail}` };
+		return { message: `Cannot read the backlog: ${readFailure(error)}` };
 	}
 	const lookup = { versions: byId(store.versions), epics: byId(store.epics) };
-	const order = (a: string | undefined, b: string | undefined) =>
-		(a ?? "\uffff").localeCompare(b ?? "\uffff", undefined, { numeric: true });
-	const items = store.items
-		.map((record) => toBacklogItem(record, lookup))
-		.sort((a, b) => order(a.version, b.version) || order(a.epic, b.epic));
+	const items = toItems(store, lookup);
 	if (items.length === 0) return { message: "The backlog contains no items." };
 	return { items, lookup };
 }
 
-// ---------------------------------------------------------------------------
-// Item branches
-// ---------------------------------------------------------------------------
-
-const ITEM_BRANCH = /^(?:us|task|spike|fix)\/([A-Za-z]+-\d+)(?:-|$)/;
-
-function itemId(item: BacklogItem): string | undefined {
-	return /^([A-Za-z]+-\d+)\b/.exec(item.heading)?.[1]?.toUpperCase();
-}
-
-/** Run git without prompts; resolves with stdout, or null on any failure (no git, not a repo, timeout). */
-function git(cwd: string, args: string[], timeout = GIT_TIMEOUT_MS): Promise<string | null> {
+/** `export --json --branches` in the background; resolves with null on any failure. */
+function exportWithBranches(cwd: string, fetch: boolean): Promise<ExportedStore | null> {
+	const args = [join(cwd, BACKLOG_TOOL), "export", "--json", "--branches", ...(fetch ? [] : ["--no-fetch"])];
 	return new Promise((resolve) => {
 		try {
 			execFile(
-				"git",
+				"python3",
 				args,
 				{
 					cwd,
-					timeout,
+					timeout: BRANCHES_TIMEOUT_MS,
 					maxBuffer: 32 * 1024 * 1024,
 					env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
 				},
-				(error, stdout) => resolve(error ? null : stdout),
+				(error, stdout) => {
+					if (error) return resolve(null);
+					try {
+						resolve(JSON.parse(stdout) as ExportedStore);
+					} catch {
+						resolve(null);
+					}
+				},
 			);
 		} catch {
 			resolve(null);
 		}
 	});
-}
-
-const splitLines = (out: string | null) => (out ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
-
-/** Remotes of the repository, or null outside a git repository (or without git). */
-async function gitRemotes(cwd: string): Promise<string[] | null> {
-	if ((await git(cwd, ["rev-parse", "--is-inside-work-tree"]))?.trim() !== "true") return null;
-	return splitLines(await git(cwd, ["remote"]));
-}
-
-/** Refs an item branch counts as merged into: local `main` and each remote's default branch. */
-async function mergeTargets(cwd: string, remotes: string[]): Promise<string[]> {
-	const targets: string[] = [];
-	const exists = async (ref: string) => (await git(cwd, ["rev-parse", "--verify", "--quiet", ref])) !== null;
-	if (await exists("refs/heads/main")) targets.push("refs/heads/main");
-	for (const remote of remotes) {
-		const head = (await git(cwd, ["symbolic-ref", "--quiet", `refs/remotes/${remote}/HEAD`]))?.trim();
-		if (head) targets.push(head);
-		else if (await exists(`refs/remotes/${remote}/main`)) targets.push(`refs/remotes/${remote}/main`);
-	}
-	return targets;
-}
-
-interface Candidate {
-	/** Short ref name, e.g. `task/TEC-007-slug` or `origin/task/TEC-007-slug`. */
-	ref: string;
-	time: number;
-}
-
-/** Unmerged item branches grouped by item ID, most recent commit first. */
-async function itemBranches(cwd: string, remotes: string[]): Promise<Map<string, Candidate[]>> {
-	const roots = ["refs/heads", "refs/remotes"];
-	const current = (await git(cwd, ["symbolic-ref", "--quiet", "--short", "HEAD"]))?.trim();
-	const merged = new Set<string>();
-	for (const target of await mergeTargets(cwd, remotes)) {
-		for (const ref of splitLines(await git(cwd, ["for-each-ref", "--format=%(refname)", `--merged=${target}`, ...roots]))) {
-			merged.add(ref);
-		}
-	}
-
-	// Branch name → chosen candidate (local wins over remote-tracking).
-	const byName = new Map<string, Candidate & { local: boolean }>();
-	const refs = splitLines(await git(cwd, ["for-each-ref", "--format=%(refname)%09%(committerdate:unix)", ...roots]));
-	for (const entry of refs) {
-		const [full, time] = entry.split("\t");
-		if (!full || merged.has(full)) continue;
-		let name: string;
-		let local: boolean;
-		if (full.startsWith("refs/heads/")) {
-			name = full.slice("refs/heads/".length);
-			local = true;
-		} else {
-			const rest = full.slice("refs/remotes/".length);
-			const remote = remotes.find((r) => rest.startsWith(`${r}/`));
-			if (!remote) continue;
-			name = rest.slice(remote.length + 1);
-			local = false;
-		}
-		if (!ITEM_BRANCH.test(name)) continue;
-		const ref = local ? name : full.slice("refs/remotes/".length);
-		const known = byName.get(name);
-		if (known && (known.local || !local)) continue;
-		byName.set(name, { ref, time: Number(time) || 0, local });
-	}
-
-	// On an item branch, the working tree is the freshest copy of that item: skip every branch of its ID.
-	const currentId = current ? ITEM_BRANCH.exec(current)?.[1]?.toUpperCase() : undefined;
-	const byId = new Map<string, Candidate[]>();
-	for (const [name, candidate] of byName) {
-		const id = ITEM_BRANCH.exec(name)![1]!.toUpperCase();
-		if (id === currentId) continue;
-		const list = byId.get(id) ?? [];
-		list.push({ ref: candidate.ref, time: candidate.time });
-		byId.set(id, list);
-	}
-	for (const list of byId.values()) list.sort((a, b) => b.time - a.time);
-	return byId;
-}
-
-/** Base items with each one replaced by its copy from its unmerged item branch, when there is one. */
-async function resolveFromBranches(
-	cwd: string,
-	remotes: string[],
-	base: BacklogItem[],
-	lookup: Lookup,
-): Promise<BacklogItem[]> {
-	const ids = new Set(base.map(itemId).filter((id): id is string => id !== undefined));
-	const branches = await itemBranches(cwd, remotes);
-	const resolved = new Map<string, BacklogItem>();
-	for (const [id, candidates] of branches) {
-		if (!ids.has(id)) continue;
-		for (const candidate of candidates) {
-			// `<ref>:./backlog/…` is relative to the current directory, like loadBacklog.
-			const text = await git(cwd, ["show", `${candidate.ref}:./backlog/items/${id}.json`]);
-			if (text === null) continue;
-			let item: BacklogItem;
-			try {
-				item = toBacklogItem(JSON.parse(text) as BacklogRecord, lookup);
-			} catch {
-				continue;
-			}
-			const alsoIn = candidates.filter((c) => c !== candidate).map((c) => c.ref);
-			resolved.set(id, { ...item, source: candidate.ref, alsoIn: alsoIn.length > 0 ? alsoIn : undefined });
-			break;
-		}
-	}
-	return base.map((item) => resolved.get(itemId(item) ?? "") ?? item);
 }
 
 // ---------------------------------------------------------------------------
@@ -684,33 +599,29 @@ function resolveShortcut(cwd: string): ShortcutSetting {
 }
 
 /**
- * Background update of an open overlay: states from local item branches first,
- * then again after `git fetch --prune`. Does nothing outside a git repository.
+ * Background update of an open overlay: states from the local item branches first,
+ * then, when the repository has a remote, again after the fetch. Does nothing
+ * outside a git repository.
  */
 async function refreshFromBranches(
 	cwd: string,
-	base: BacklogItem[],
 	lookup: Lookup,
 	overlay: BacklogOverlay,
 	isClosed: () => boolean,
 ): Promise<void> {
 	try {
-		const remotes = await gitRemotes(cwd);
-		if (remotes === null || isClosed()) return;
-		const fetch = remotes.length > 0 ? git(cwd, ["fetch", "--prune", "--quiet"], FETCH_TIMEOUT_MS) : null;
-		if (fetch) overlay.setFetchState("fetching");
-		const local = await resolveFromBranches(cwd, remotes, base, lookup);
-		if (!isClosed()) overlay.setItems(local);
-		if (!fetch) return;
-		const fetched = (await fetch) !== null;
+		const local = await exportWithBranches(cwd, false);
+		if (isClosed() || !local?.branches || local.branches.fetch === "none") return;
+		overlay.setItems(toItems(local, lookup));
+		if (local.branches.remotes.length === 0) return;
+		overlay.setFetchState("fetching");
+		const fetched = await exportWithBranches(cwd, true);
 		if (isClosed()) return;
-		if (!fetched) {
+		if (!fetched?.branches || fetched.branches.fetch !== "done") {
 			overlay.setFetchState("failed");
 			return;
 		}
-		const updated = await resolveFromBranches(cwd, remotes, base, lookup);
-		if (isClosed()) return;
-		overlay.setItems(updated);
+		overlay.setItems(toItems(fetched, lookup));
 		overlay.setFetchState("done");
 	} catch {
 		// Never break the overlay: it keeps showing what it has.
@@ -747,7 +658,7 @@ export default function (pi: ExtensionAPI) {
 							done();
 						},
 					);
-					if ("items" in load) void refreshFromBranches(cwd, load.items, load.lookup, overlay, () => closed);
+					if ("items" in load) void refreshFromBranches(cwd, load.lookup, overlay, () => closed);
 					return overlay;
 				},
 				{

@@ -120,6 +120,8 @@ class Store:
         self.epics: dict[str, dict] = {}
         self.load_errors: list[tuple[str, str]] = []
         self.non_canonical: set[str] = set()
+        self.branch_sources: dict[str, dict] = {}
+        self.remotes: list[str] = []
         for kind in self.KINDS:
             self._load(kind)
 
@@ -410,44 +412,122 @@ def save(store: Store, kind: str, record: dict) -> None:
 # --- Branch overlay ---------------------------------------------------------
 
 
-def git(root: Path, *args: str) -> subprocess.CompletedProcess:
+GIT_TIMEOUT = 10
+ITEM_BRANCH = re.compile(r"^(?:us|task|spike|fix)/((?:US|TEC|SPIKE|BUG)-\d{3,})(?:-|$)")
+
+
+def git(root: Path, *args: str, timeout: int = GIT_TIMEOUT) -> subprocess.CompletedProcess:
+    """Run git in the store root without prompts; a timeout is reported as a failure."""
+    command = ["git", "-C", str(root), *args]
     try:
         return subprocess.run(
-            ["git", "-C", str(root), *args], capture_output=True, text=True, encoding="utf-8",
+            command, capture_output=True, text=True, encoding="utf-8", timeout=timeout,
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
         )
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(command, 1, "", f"git {args[0]} timed out after {timeout} s")
     except OSError as error:
         raise BacklogError(f"cannot run git: {error}") from error
 
 
-def overlay_branches(store: Store) -> None:
-    """Replace each item with its copy on its own unmerged remote item branch, newest branch last."""
-    fetched = git(store.root, "fetch", "--prune", "origin")
-    if fetched.returncode != 0:
-        print(f"warning: git fetch failed, branch data may be stale: {fetched.stderr.strip()}", file=sys.stderr)
-    has_main = git(store.root, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/main").returncode == 0
-    unmerged = ["--no-merged=refs/remotes/origin/main"] if has_main else []
-    refs = git(
-        store.root, "for-each-ref", "--sort=committerdate", "--format=%(refname:short)", *unmerged,
-        "refs/remotes/origin/",
-    )
-    if refs.returncode != 0:
-        print(f"warning: cannot list remote branches: {refs.stderr.strip()}", file=sys.stderr)
-        return
-    pattern = re.compile(r"^origin/(?:us|task|spike|fix)/((?:US|TEC|SPIKE|BUG)-\d{3,})-")
-    for ref in refs.stdout.split():
-        match = pattern.match(ref)
-        if not match:
+def git_lines(root: Path, *args: str) -> list[str]:
+    result = git(root, *args)
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()] if result.returncode == 0 else []
+
+
+def merge_targets(root: Path, remotes: list[str]) -> list[str]:
+    """Refs an item branch counts as merged into: local main and each remote's default branch."""
+    def exists(ref: str) -> bool:
+        return git(root, "rev-parse", "--verify", "--quiet", ref).returncode == 0
+
+    targets = ["refs/heads/main"] if exists("refs/heads/main") else []
+    for remote in remotes:
+        head = git(root, "symbolic-ref", "--quiet", f"refs/remotes/{remote}/HEAD")
+        if head.returncode == 0 and head.stdout.strip():
+            targets.append(head.stdout.strip())
+        elif exists(f"refs/remotes/{remote}/main"):
+            targets.append(f"refs/remotes/{remote}/main")
+    return targets
+
+
+def item_branches(root: Path, remotes: list[str]) -> dict[str, list[str]]:
+    """Unmerged item branches, local and remote-tracking, by item ID, most recent commit first.
+
+    A local branch wins over the remote-tracking branch with the same name. On an item
+    branch, every branch of its own ID is left out: the working tree is its freshest copy.
+    """
+    roots = ("refs/heads", "refs/remotes")
+    merged: set[str] = set()
+    for target in merge_targets(root, remotes):
+        merged.update(git_lines(root, "for-each-ref", "--format=%(refname)", f"--merged={target}", *roots))
+    by_name: dict[str, tuple[str, int, bool]] = {}
+    for entry in git_lines(root, "for-each-ref", "--format=%(refname)%09%(committerdate:unix)", *roots):
+        full, _, time = entry.partition("\t")
+        if full in merged:
             continue
-        shown = git(store.root, "show", f"{ref}:backlog/items/{match[1]}.json")
-        if shown.returncode != 0:
+        if full.startswith("refs/heads/"):
+            name, local = full[len("refs/heads/"):], True
+            ref = name
+        else:
+            ref = full[len("refs/remotes/"):]
+            remote = next((r for r in remotes if ref.startswith(f"{r}/")), None)
+            if remote is None:
+                continue
+            name, local = ref[len(remote) + 1:], False
+        if not ITEM_BRANCH.match(name):
             continue
-        try:
-            data = json.loads(shown.stdout)
-        except json.JSONDecodeError:
-            print(f"warning: {ref} holds an invalid item file for {match[1]}", file=sys.stderr)
+        known = by_name.get(name)
+        if known and (known[2] or not local):
             continue
-        if isinstance(data, dict) and data.get("id") == match[1]:
-            store.items[match[1]] = data
+        by_name[name] = (ref, int(time) if time.isdigit() else 0, local)
+    current = git(root, "symbolic-ref", "--quiet", "--short", "HEAD").stdout.strip()
+    current_match = ITEM_BRANCH.match(current)
+    current_id = current_match[1] if current_match else None
+    by_id: dict[str, list[tuple[str, int]]] = {}
+    for name, (ref, time, _) in by_name.items():
+        item_id = ITEM_BRANCH.match(name)[1]
+        if item_id != current_id:
+            by_id.setdefault(item_id, []).append((ref, time))
+    return {item_id: [ref for ref, _ in sorted(refs, key=lambda c: -c[1])] for item_id, refs in by_id.items()}
+
+
+def overlay_branches(store: Store, fetch: bool = True) -> str:
+    """Replace each item with its copy on its unmerged item branch; return the fetch outcome.
+
+    Rules in docs/PROCESS-PARALLEL.md §1. Items that exist only in a branch are not added.
+    The source branch of each replaced item, and any other branch that carries it, are kept
+    in store.branch_sources, the remotes in store.remotes. The outcome is "done", "failed",
+    "skipped" (not asked or no remote) or "none" (not a git repository).
+    """
+    inside = git(store.root, "rev-parse", "--is-inside-work-tree")
+    if inside.returncode != 0 or inside.stdout.strip() != "true":
+        print("warning: not a git repository, branch data not available", file=sys.stderr)
+        return "none"
+    remotes = store.remotes = git_lines(store.root, "remote")
+    outcome = "skipped"
+    if fetch and remotes:
+        target = ["origin"] if "origin" in remotes else []
+        fetched = git(store.root, "fetch", "--prune", "--quiet", *target)
+        outcome = "done" if fetched.returncode == 0 else "failed"
+        if outcome == "failed":
+            print(f"warning: git fetch failed, branch data may be stale: {fetched.stderr.strip()}", file=sys.stderr)
+    for item_id, refs in item_branches(store.root, remotes).items():
+        if item_id not in store.items:
+            continue
+        for ref in refs:
+            shown = git(store.root, "show", f"{ref}:./backlog/items/{item_id}.json")
+            if shown.returncode != 0:
+                continue
+            try:
+                data = json.loads(shown.stdout)
+            except json.JSONDecodeError:
+                print(f"warning: {ref} holds an invalid item file for {item_id}", file=sys.stderr)
+                continue
+            if isinstance(data, dict) and data.get("id") == item_id:
+                store.items[item_id] = data
+                store.branch_sources[item_id] = {"source": ref, "also_in": [r for r in refs if r != ref]}
+                break
+    return outcome
 
 
 # --- Plain list files -------------------------------------------------------
@@ -546,7 +626,7 @@ def print_section(title: str, records: list, render, limit: int = SECTION_LIMIT)
 def cmd_status(store: Store, args) -> int:
     store.require_loaded()
     if args.branches:
-        overlay_branches(store)
+        overlay_branches(store, fetch=not args.no_fetch)
     data = build_status(store)
     if args.json:
         slim = {
@@ -587,7 +667,7 @@ def print_items(items: list, total: int, as_json: bool) -> None:
 def cmd_list(store: Store, args) -> int:
     store.require_loaded()
     if args.branches:
-        overlay_branches(store)
+        overlay_branches(store, fetch=not args.no_fetch)
     found = list(store.items.values())
     for field in ("version", "epic", "type", "priority", "status", "module"):
         wanted = getattr(args, field)
@@ -603,7 +683,7 @@ def cmd_list(store: Store, args) -> int:
 def cmd_ready(store: Store, args) -> int:
     store.require_loaded()
     if args.branches:
-        overlay_branches(store)
+        overlay_branches(store, fetch=not args.no_fetch)
     found = store.ready()
     print_items(found[: args.limit] if args.limit else found, len(found), args.json)
     return 0
@@ -642,25 +722,35 @@ def item_lines(item: dict) -> list[str]:
 def cmd_show(store: Store, args) -> int:
     store.require_loaded()
     if args.branches:
-        overlay_branches(store)
+        overlay_branches(store, fetch=not args.no_fetch)
     item = store.item(args.id)
     if args.json:
         print(json.dumps(item, ensure_ascii=False, indent=2))
         return 0
     print(f"{item['id']} — {item.get('title')}")
     print("\n".join(item_lines(item)))
+    origin = store.branch_sources.get(item["id"])
+    if origin:
+        print(f"- **From branch:** {origin['source']}")
+        if origin["also_in"]:
+            print(f"- **Also in:** {', '.join(origin['also_in'])}")
     return 0
 
 
 def cmd_export(store: Store, args) -> int:
     store.require_loaded()
+    fetch = overlay_branches(store, fetch=not args.no_fetch) if args.branches else None
     if args.json:
-        print(json.dumps(
-            {"versions": sorted(store.versions.values(), key=lambda v: version_key(v["id"])),
-             "epics": sorted(store.epics.values(), key=lambda e: e["id"]),
-             "items": sorted(store.items.values(), key=lambda i: item_key(i["id"]))},
-            ensure_ascii=False, indent=2,
-        ))
+        data = {
+            "versions": sorted(store.versions.values(), key=lambda v: version_key(v["id"])),
+            "epics": sorted(store.epics.values(), key=lambda e: e["id"]),
+            "items": sorted(store.items.values(), key=lambda i: item_key(i["id"])),
+        }
+        if fetch is not None:
+            data["branches"] = {
+                "fetch": fetch, "remotes": store.remotes, "items": dict(sorted(store.branch_sources.items())),
+            }
+        print(json.dumps(data, ensure_ascii=False, indent=2))
         return 0
     out = ["# Product Backlog"]
     for version in sorted(store.versions.values(), key=lambda v: version_key(v["id"])):
@@ -1326,7 +1416,11 @@ def reading(subparsers, name: str, handler, help_text: str, branches: bool = Tru
     parser = subparsers.add_parser(name, help=help_text)
     parser.add_argument("--json", action="store_true")
     if branches:
-        parser.add_argument("--branches", action="store_true", help="fetch and overlay items from origin/* item branches")
+        parser.add_argument(
+            "--branches", action="store_true",
+            help="fetch, then show each item as it is on its unmerged local or remote item branch",
+        )
+        parser.add_argument("--no-fetch", action="store_true", help="with --branches, use the refs already fetched")
     parser.set_defaults(handler=handler)
     return parser
 
@@ -1365,7 +1459,7 @@ def build_parser() -> argparse.ArgumentParser:
     ready.add_argument("--limit", type=int, default=SECTION_LIMIT, help="0 means no limit")
     show = reading(commands, "show", cmd_show, "one item in full")
     show.add_argument("id")
-    reading(commands, "export", cmd_export, "whole backlog on stdout, never committed", branches=False)
+    reading(commands, "export", cmd_export, "whole backlog on stdout, never committed")
     reading(commands, "check", cmd_check, "validate the store", branches=False)
     list_file_parser(commands, "notes", "NOTES.md", "read or change the cross-cutting notes")
     list_file_parser(commands, "ideas", "IDEAS.md", "read or change the unassigned ideas")

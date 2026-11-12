@@ -11,7 +11,13 @@ Optional rule for agents working in parallel in separate clones or directories. 
 - Push the **item branch** right after every commit that changes the item's state in that branch: start (`In Progress`), `Blocked`, resume and `Done`. Use `git push -u origin <branch>` for the first push. `main` is pushed automatically only after adding an item (`docs/PROCESS.md` §6.1); merges follow `docs/PROCESS.md` §6.3 unchanged.
 - If a push fails, keep the local commit, report that the claim is not shared, and do not start or continue the implementation until the user decides.
 - The claim ends when the merged branch is deleted from the remote (`docs/PROCESS.md` §6.3).
-- `backlog status --branches` is the cross-clone view: it fetches and shows each item as it is on its unmerged item branch on `origin`. Without the option, the status reflects only the current checkout.
+- `--branches` (on `status`, `list`, `ready`, `show` and `export`) is the cross-clone view: it runs `git fetch --prune origin` (10 s timeout; `--no-fetch` skips it) and shows each item as it is on its item branch. Without the option, the backlog reflects only the current checkout. The rules:
+  - item branches are the local and remote-tracking branches named `<prefix><ID>-…` (`docs/PROCESS.md` §6.1) that are not merged into local `main` or into a remote's default branch;
+  - a local branch wins over the remote-tracking branch with the same name;
+  - on an item branch, its own item keeps the working-tree copy;
+  - with several branches for one ID, the one with the most recent commit wins; `show` lists it with the others, `export --json` gives them under `branches`;
+  - items that exist only in a branch are not shown;
+  - a failed fetch is only a warning: the last fetched refs are used.
 
 ## 2. Parallel work
 
