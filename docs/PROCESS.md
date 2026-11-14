@@ -1,6 +1,6 @@
 # Development Process
 
-**Process version:** 2.2.1
+**Process version:** 2.3.0
 
 The simplified Scrum process shared by every project created from `agile-project-template`. It is project-agnostic and must stay identical across projects. Project-specific rules live in `AGENTS.md`; a deviation from this process must be listed in its `Process overrides` section, otherwise this document wins.
 
