@@ -19,7 +19,7 @@ Rules: `docs/PROCESS.md` §7, §8 and the quality gate and DoD additions in `AGE
 3. Walk through the Definition of Done (`docs/PROCESS.md` §8 and `AGENTS.md` §7):
    - tests at the right level, regression test for bugs;
    - no secrets in files, commits or logs;
-   - requirements, technical design, ADRs, configuration examples, README updated where needed;
+   - requirements, technical design, ADRs, configuration examples, README updated where needed; requirement and design files describe the current state, without item history (`docs/PROCESS.md` §5.3);
    - for spikes: report in `docs/spikes/` answers every question, index updated.
 
 If anything is not satisfied, the item is **not** `Done`: report what is missing and either keep working, or with the user's agreement mark it `Blocked` (with shared claims on, push the item branch after that commit, as in step 4) or split it into a new item. To add that item, preserve the current work and ask the user to return to a clean `main` before using `add-item`.

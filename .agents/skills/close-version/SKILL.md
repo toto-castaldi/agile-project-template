@@ -13,7 +13,7 @@ Rules: `docs/PROCESS.md` §4.1, §9. `backlog` is `python3 .agents/tools/backlog
 1. `main` is up to date (`git switch main && git pull --ff-only`) and the working tree is clean.
 2. Every item assigned to the version is `Done` or `Dropped` (`backlog list --version vX.Y.Z`). List any that are not and stop.
 3. No item branch of this version is still unmerged (`git branch -a --no-merged main`). Report any and stop.
-4. Walk through the release acceptance criteria in `docs/REQUIREMENTS.md` §7: for each, give evidence. Stop if any is not met, unless the user explicitly decides otherwise (record that decision with `backlog notes --add`).
+4. Walk through the release acceptance criteria in `docs/requirements/acceptance.md`: for each, give evidence. Stop if any is not met, unless the user explicitly decides otherwise (record that decision with `backlog notes --add`).
 5. Run the closing quality gate from `AGENTS.md` §6 on `main` (lint, typecheck, build and in-memory unit tests only), and separately run all integration suites listed there. Verify external-service end-to-end evidence separately as required by release acceptance. Stop if any required check fails.
 
 ## 2. Release branch
@@ -26,7 +26,11 @@ git switch -c release/vX.Y.Z
 
 1. `CHANGELOG.md`: rename `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD`, remove empty subsections, add a new empty `[Unreleased]` section on top.
 2. `backlog close-version vX.Y.Z`. Ask the user whether to open the next version now: if yes, `backlog version open vA.B.C` or `backlog version add vA.B.C --goal …`. Existing fully defined items may be moved with `backlog edit <ID> --version …`; do not create new items on the release branch. Promote unassigned ideas to items later on `main` using `add-item`.
-3. `docs/REQUIREMENTS.md` / `docs/TECHNICAL-DESIGN.md`: update the target version only if the next version is opened.
+3. Compact requirements and design (`docs/PROCESS.md` §5.3):
+   - `docs/requirements/README.md`: remove the scope in and out of the closed version; capabilities that remain binding are covered by their requirements. `docs/requirements/acceptance.md`: remove the criteria of the closed version.
+   - The files of `docs/requirements/` and `docs/design/` changed since the previous tag (`git diff --name-only <previous tag>..HEAD -- docs/requirements docs/design`, all files for the first version): rewrite each to the current state, removing item IDs, dates, decision narratives and evidence. Do not change behavior or decisions; if the rewrite reveals a conflict, stop and report it.
+   - If the next version is opened, set the target version of the two `README.md` files and write its scope and acceptance as agreed with the user.
+   - Remove `Withdrawn` requirements whose ID no open item references only if the user agrees; the ID is never reused.
 4. `backlog check`.
 5. Commit: `release(vX.Y.Z): <short description in the project language>`.
 

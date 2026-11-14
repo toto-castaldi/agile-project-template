@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-Use an ADR for a decision with relevant alternatives or long-term consequences that would bloat `docs/TECHNICAL-DESIGN.md` (`docs/PROCESS.md` §5.2).
+Use an ADR for a decision with relevant alternatives or long-term consequences that would bloat a design topic in `docs/design/` (`docs/PROCESS.md` §5.2).
 
 - File name: `ADR-NNN-short-slug.md`, starting from `ADR-001`, never reused.
 - Copy `_TEMPLATE.md`, write the content in the project language.

@@ -15,7 +15,7 @@ At the start of every session run `python3 .agents/tools/backlog.py status`, the
 - **Name:** `<project-name>`
 - **Summary:** `<one or two sentences: what the project does and for whom>`
 - **Current version:** see `python3 .agents/tools/backlog.py status`.
-- **Requirements:** `docs/REQUIREMENTS.md` · **Design:** `docs/TECHNICAL-DESIGN.md`
+- **Requirements:** `docs/requirements/` · **Design:** `docs/design/` (one file each, list them with `python3 .agents/tools/backlog.py docs`; read only those you need)
 
 ## 2. Language
 
@@ -25,7 +25,7 @@ At the start of every session run `python3 .agents/tools/backlog.py status`, the
 
 ## 3. Scope
 
-The scope of the current version is defined in `docs/REQUIREMENTS.md`. Do not implement anything listed there as out of scope without first updating requirements and backlog and agreeing the scope change with the user.
+The scope of the current version is defined in `docs/requirements/README.md`. Do not implement anything listed there as out of scope without first updating requirements and backlog and agreeing the scope change with the user.
 
 `<Optional: two or three bullets with the most important scope boundaries the agent must keep in mind.>`
 
@@ -40,11 +40,11 @@ Unless a different decision is recorded in the backlog and in the technical desi
 - `<test framework>`
 - `<local runtime, e.g. Docker Compose>`
 
-Architecture and module boundaries: `<short description, details in TECHNICAL-DESIGN §N>`.
+Architecture and module boundaries: `<short description, details in docs/design/<topic>.md>`.
 
 ## 5. Domain rules
 
-`<Invariants and business rules the agent must never violate, grouped by topic. Keep them short; the full specification is in docs/REQUIREMENTS.md.>`
+`<Invariants and business rules the agent must never violate, grouped by topic. Keep them short; the full specification is in docs/requirements/.>`
 
 ## 6. Quality gate
 

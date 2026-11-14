@@ -17,6 +17,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import unicodedata
 from pathlib import Path
 
 if sys.version_info < (3, 10):
@@ -266,11 +267,97 @@ def check_epics(store: Store, errors) -> None:
             errors.append((eid, "epic id must be EPIC-NNN"))
 
 
-def read_doc(root: Path, relative: str) -> str | None:
-    try:
-        return (root / relative).read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return None
+REQUIREMENTS_DIR = "docs/requirements"
+DESIGN_DIR = "docs/design"
+MODULES_FILE = f"{DESIGN_DIR}/modules.md"
+DOC_FOLDERS = {"requirements": REQUIREMENTS_DIR, "design": DESIGN_DIR}
+REQUIREMENT_STATES = ("Active", "Withdrawn")
+STATE_LINE = re.compile(r"^\*\*State:\*\*\s*(\S+)")
+OPEN_STATES = ("Todo", "In Progress", "Blocked")
+
+
+class Docs:
+    """Requirement and design files, read from disk or built in memory by the migration."""
+
+    def __init__(self, files: dict[str, str], unreadable: tuple = ()):
+        self.files = files
+        self.errors: list[tuple[str, str]] = [(path, "cannot be read as UTF-8 text") for path in unreadable]
+        self.requirements = self._requirements()
+        self.design = self._design()
+        self.modules = files.get(MODULES_FILE)
+
+    @classmethod
+    def load(cls, root: Path) -> "Docs":
+        files, unreadable = {}, []
+        for folder in DOC_FOLDERS.values():
+            directory = root / folder
+            if not directory.is_dir():
+                continue
+            for path in sorted(directory.glob("*.md")):
+                try:
+                    files[f"{folder}/{path.name}"] = path.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError):
+                    files[f"{folder}/{path.name}"] = ""
+                    unreadable.append(f"{folder}/{path.name}")
+        return cls(files, tuple(unreadable))
+
+    def _in(self, folder: str) -> list[tuple[str, str, str]]:
+        """(stem, path, text) of the content files of a folder, without README and _TEMPLATE-like files."""
+        found = []
+        for path, text in sorted(self.files.items()):
+            directory, _, name = path.rpartition("/")
+            stem = name[:-3]
+            if directory == folder and stem != "README" and not stem.startswith("_"):
+                found.append((stem, path, text))
+        return found
+
+    def _present(self, folder: str) -> bool:
+        return any(path.startswith(folder + "/") for path in self.files)
+
+    def _requirements(self) -> dict | None:
+        if not self._present(REQUIREMENTS_DIR):
+            return None
+        found = {}
+        for stem, path, text in self._in(REQUIREMENTS_DIR):
+            if not stem.startswith("REQ-"):
+                continue
+            if not REQUIREMENT_ID.match(stem):
+                self.errors.append((path, "requirement file name must be REQ-<AREA>-NNN.md"))
+                continue
+            lines = text.splitlines()
+            heading = re.match(rf"^# {re.escape(stem)} — (.+)$", lines[0] if lines else "")
+            if not heading:
+                self.errors.append((path, f"first line must be '# {stem} — <title>'"))
+            states = [m[1] for m in (STATE_LINE.match(line) for line in lines) if m]
+            if len(states) != 1 or states[0] not in REQUIREMENT_STATES:
+                self.errors.append((path, "needs one line '**State:** Active' or '**State:** Withdrawn'"))
+            found[stem] = {
+                "id": stem, "title": heading[1].strip() if heading else "", "path": path,
+                "state": states[0] if len(states) == 1 else None,
+            }
+        return found
+
+    def _design(self) -> dict | None:
+        if not self._present(DESIGN_DIR):
+            return None
+        found = {}
+        for stem, path, text in self._in(DESIGN_DIR):
+            if not re.fullmatch(SLUG, stem):
+                self.errors.append((path, "design topic file name must be lowercase kebab-case"))
+                continue
+            first = text.splitlines()[0] if text else ""
+            if not first.startswith("# ") or not first[2:].strip():
+                self.errors.append((path, "first line must be '# <title>'"))
+            found[stem] = {"reference": f"design/{stem}", "title": first[2:].strip(), "path": path}
+        return found
+
+    def resolves(self, reference: str) -> bool:
+        folder, _, name = reference.partition("/")
+        return bool(name) and not name.startswith("_") and f"{DOC_FOLDERS[folder]}/{name}.md" in self.files
+
+
+def is_doc_reference(reference: str) -> bool:
+    return reference.partition("/")[0] in DOC_FOLDERS and "/" in reference
 
 
 def check_item(store: Store, iid: str, item: dict, docs: dict, errors) -> None:
@@ -294,6 +381,7 @@ def check_item(store: Store, iid: str, item: dict, docs: dict, errors) -> None:
         errors.append((iid, f"unknown epic {item.get('epic')!r}"))
     check_module(iid, item, docs, errors)
     check_requirements(iid, item, prefix, docs, errors)
+    check_design_references(iid, item, docs, errors)
     if prefix == "BUG":
         for field in ("found_in", "steps_to_reproduce", "expected", "actual"):
             if not item.get(field):
@@ -308,8 +396,8 @@ def check_module(iid, item, docs, errors) -> None:
         return
     if not MODULE_ID.match(str(module)):
         errors.append((iid, f"invalid module {module!r}: use MOD-NNN"))
-    elif docs["design"] is not None and str(module) not in docs["design"]:
-        errors.append((iid, f"module {module} is not in docs/TECHNICAL-DESIGN.md"))
+    elif docs.modules is not None and str(module) not in docs.modules:
+        errors.append((iid, f"module {module} is not in {MODULES_FILE}"))
 
 
 def check_requirements(iid, item, prefix, docs, errors) -> None:
@@ -321,8 +409,22 @@ def check_requirements(iid, item, prefix, docs, errors) -> None:
     for requirement in requirements:
         if not REQUIREMENT_ID.match(str(requirement)):
             errors.append((iid, f"invalid requirement {requirement!r}: use REQ-<AREA>-NNN"))
-        elif docs["requirements"] is not None and str(requirement) not in docs["requirements"]:
-            errors.append((iid, f"requirement {requirement} is not in docs/REQUIREMENTS.md"))
+        elif docs.requirements is not None:
+            found = docs.requirements.get(str(requirement))
+            if found is None:
+                errors.append((iid, f"requirement {requirement} is not in {REQUIREMENTS_DIR}/"))
+            elif found["state"] == "Withdrawn" and item.get("status") in OPEN_STATES:
+                errors.append((iid, f"requirement {requirement} is Withdrawn"))
+
+
+def check_design_references(iid, item, docs, errors) -> None:
+    references = item.get("design_references") or []
+    if not isinstance(references, list):
+        return
+    for reference in references:
+        if isinstance(reference, str) and is_doc_reference(reference) and not docs.resolves(reference):
+            folder, _, name = reference.partition("/")
+            errors.append((iid, f"design reference {reference!r}: {DOC_FOLDERS[folder]}/{name}.md does not exist"))
 
 
 def check_status(store, iid, item, prefix, errors) -> None:
@@ -383,14 +485,12 @@ def _dependencies(store: Store, item_id: str) -> list:
     return [d for d in dependencies if isinstance(d, str)] if isinstance(dependencies, list) else []
 
 
-def validate(store: Store) -> list[tuple[str, str]]:
+def validate(store: Store, docs: Docs | None = None) -> list[tuple[str, str]]:
     errors = list(store.load_errors)
     check_versions(store, errors)
     check_epics(store, errors)
-    docs = {
-        "design": read_doc(store.root, "docs/TECHNICAL-DESIGN.md"),
-        "requirements": read_doc(store.root, "docs/REQUIREMENTS.md"),
-    }
+    docs = docs or Docs.load(store.root)
+    errors.extend(docs.errors)
     for iid, item in sorted(store.items.items(), key=lambda pair: item_key(pair[0])):
         check_item(store, iid, item, docs, errors)
     for where in sorted(store.non_canonical):
@@ -1388,6 +1488,304 @@ def cmd_import_md(store: Store, args) -> int:
     return 0
 
 
+def requirement_key(requirement_id: str) -> tuple:
+    _, area, number = requirement_id.split("-", 2)
+    return (area == "NFR", area, int(number))
+
+
+def cmd_docs(store: Store, args) -> int:
+    docs = Docs.load(store.root)
+    requirements = sorted((docs.requirements or {}).values(), key=lambda r: requirement_key(r["id"]))
+    design = sorted((docs.design or {}).values(), key=lambda d: d["reference"])
+    if args.json:
+        print(json.dumps({"requirements": requirements, "design": design}, ensure_ascii=False, indent=2))
+        return 0
+    print(f"Requirements ({REQUIREMENTS_DIR}/<ID>.md):")
+    for requirement in requirements:
+        state = "" if requirement["state"] == "Active" else f" ({requirement['state']})"
+        print(f"- {requirement['id']} — {shorten(requirement['title'])}{state}")
+    if not requirements:
+        print("- none")
+    print(f"Design ({DESIGN_DIR}/<topic>.md, referenced as design/<topic>):")
+    for topic in design:
+        print(f"- {topic['reference']} — {shorten(topic['title'])}")
+    if not design:
+        print("- none")
+    return 0
+
+
+# --- Migration of REQUIREMENTS.md and TECHNICAL-DESIGN.md -------------------
+
+LEGACY_REQUIREMENTS = "docs/REQUIREMENTS.md"
+LEGACY_DESIGN = "docs/TECHNICAL-DESIGN.md"
+LEGACY_REFERENCE = re.compile(
+    r"(?<![\w/])(?:docs/)?(TECHNICAL-DESIGN|REQUIREMENTS)(?:\.md)?(?:\s*§\s*(\d+)(?:\.\d+)*)?(?![\w-])"
+)
+HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
+SECTION_NUMBER = re.compile(r"^\d+(?:\.\d+)*\.?\s+")
+REQUIREMENT_HEADING = re.compile(r"^(REQ-[A-Z0-9]+-\d+)\b\s*[—–:-]?\s*(.*)$")
+DESIGN_TOPICS = {
+    "context and main flows": "context", "modules": "modules", "data model": "data-model",
+    "invariants and consistency": "invariants", "integrations": "integrations",
+    "security and observability": "security", "test strategy": "test-strategy",
+    "configuration and local runtime": "configuration",
+}
+DESIGN_README_SECTIONS = ("initial architectural decisions", "open decisions")
+
+
+def slugify(text: str) -> str:
+    ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-")
+
+
+def markdown_lines(text: str):
+    """(line, heading level or 0, heading text, in a code fence) for each line."""
+    fence = None
+    for line in text.splitlines():
+        marker = re.match(r"^\s*(```+|~~~+)", line)
+        fenced = bool(fence or marker)
+        if marker:
+            if fence is None:
+                fence = marker[1][0]
+            elif marker[1][0] == fence:
+                fence = None
+        heading = None if fenced else HEADING.match(line)
+        yield line, (len(heading[1]) if heading else 0), (heading[2] if heading else ""), fenced
+
+
+def shifted(level: int, text: str, shift: int) -> str:
+    return f"{'#' * max(1, level - shift)} {text}"
+
+
+def drop_empty_sections(lines: list[str]) -> list[str]:
+    """Remove headings with no content before the next heading of the same or a higher level."""
+    parsed = list(markdown_lines("\n".join(lines)))
+    keep = []
+    for index, (line, level, _, _) in enumerate(parsed):
+        if level >= 2:
+            following = []
+            for other, other_level, _, _ in parsed[index + 1:]:
+                if other_level and other_level <= level:
+                    break
+                following.append((other, other_level))
+            if not any(other.strip() and not other_level for other, other_level in following):
+                continue
+        keep.append(line)
+    return keep
+
+
+def tidy(lines: list[str]) -> str:
+    """One blank line around headings and between blocks; code fences are kept as they are."""
+    out: list[str] = []
+
+    def blank() -> None:
+        if out and out[-1].strip():
+            out.append("")
+
+    for line, level, _, fenced in markdown_lines("\n".join(lines)):
+        if fenced:
+            out.append(line)
+        elif level:
+            blank()
+            out += [line.rstrip(), ""]
+        elif line.strip():
+            out.append(line.rstrip())
+        else:
+            blank()
+    while out and not out[-1].strip():
+        out.pop()
+    return "\n".join(out) + "\n"
+
+
+class DocsMigration:
+    def __init__(self):
+        self.files: dict[str, list[str]] = {}
+        self.sections: dict[tuple[str, str], str] = {}
+        self.problems: list[str] = []
+
+    def target(self, path: str, first: str | None = None) -> list[str]:
+        if path not in self.files:
+            self.files[path] = [first] if first else []
+        return self.files[path]
+
+    def split_requirements(self, text: str) -> None:
+        readme = self.target(f"{REQUIREMENTS_DIR}/README.md")
+        current, section, shift, root = readme, "", 0, 0
+        for line, level, title, _ in markdown_lines(text):
+            match = REQUIREMENT_HEADING.match(title) if level >= 2 else None
+            if match:
+                requirement_id, name = match[1], match[2].strip() or match[1]
+                path = f"{REQUIREMENTS_DIR}/{requirement_id}.md"
+                if path in self.files:
+                    self.problems.append(f"{LEGACY_REQUIREMENTS}: {requirement_id} appears twice")
+                state = "Withdrawn" if section.lower().startswith("withdrawn") else "Active"
+                current = self.target(path, f"# {requirement_id} — {name}")
+                current += ["", f"**State:** {state}", ""]
+                shift, root = level - 1, level
+                continue
+            if level == 1 and current is readme and not readme:
+                readme.append(line)
+                continue
+            if level and (level <= 2 or (root and level <= root)):
+                name = SECTION_NUMBER.sub("", title)
+                if level <= 2:
+                    section = name
+                    number = re.match(r"^(\d+)", title)
+                    lowered = name.lower()
+                    if lowered == "glossary":
+                        current, shift, root = self.target(f"{REQUIREMENTS_DIR}/glossary.md", f"# {name}"), 1, 0
+                        reference = "requirements/glossary"
+                    elif lowered.startswith("release acceptance"):
+                        current, shift, root = self.target(f"{REQUIREMENTS_DIR}/acceptance.md", f"# {name}"), 1, 0
+                        reference = "requirements/acceptance"
+                    else:
+                        current, shift, root = readme, 0, 0
+                        reference = "requirements/README"
+                        readme.append(f"## {name}")
+                    if number:
+                        self.sections[("REQUIREMENTS", number[1])] = reference
+                    continue
+                current, shift, root = readme, 0, 0
+                readme.append(shifted(level, name, 0))
+                continue
+            if section.lower().startswith("withdrawn") and current is readme and line.strip() == "None.":
+                continue
+            current.append(shifted(level, title, shift) if level else line)
+
+    def split_design(self, text: str) -> None:
+        readme = self.target(f"{DESIGN_DIR}/README.md")
+        current, shift = readme, 0
+        for line, level, title, _ in markdown_lines(text):
+            if level == 1 and current is readme and not readme:
+                readme.append(line)
+                continue
+            if level == 2:
+                name = SECTION_NUMBER.sub("", title)
+                number = re.match(r"^(\d+)", title)
+                lowered = name.lower()
+                if lowered in DESIGN_README_SECTIONS:
+                    current, shift, reference = readme, 0, "design/README"
+                    readme.append(f"## {name}")
+                else:
+                    base = DESIGN_TOPICS.get(lowered) or slugify(name) or f"section-{number[1] if number else len(self.files)}"
+                    slug, counter = base, 2
+                    while f"{DESIGN_DIR}/{slug}.md" in self.files or slug == "readme":
+                        slug, counter = f"{base}-{counter}", counter + 1
+                    current, shift = self.target(f"{DESIGN_DIR}/{slug}.md", f"# {name}"), 1
+                    reference = f"design/{slug}"
+                if number:
+                    self.sections[("TECHNICAL-DESIGN", number[1])] = reference
+                continue
+            current.append(shifted(level, title, shift) if level else line)
+
+    def rendered(self) -> dict[str, str]:
+        out = {}
+        for path, lines in self.files.items():
+            if path.endswith("/README.md"):
+                lines = drop_empty_sections(lines)
+            out[path] = tidy(lines)
+        return out
+
+    def rewrite(self, text: str, unresolved: set) -> str:
+        def replace(match: re.Match) -> str:
+            document, number = match[1], match[2]
+            if number is None:
+                return "design/README" if document == "TECHNICAL-DESIGN" else "requirements/README"
+            reference = self.sections.get((document, number))
+            if reference is None:
+                unresolved.add(match[0])
+                return match[0]
+            return reference
+        return LEGACY_REFERENCE.sub(replace, text)
+
+
+def rewrite_item(migration: DocsMigration, item: dict, unresolved: set) -> bool:
+    changed = False
+    for field, value in list(item.items()):
+        if isinstance(value, str):
+            new = migration.rewrite(value, unresolved)
+        elif isinstance(value, list) and all(isinstance(entry, str) for entry in value):
+            new = [migration.rewrite(entry, unresolved) for entry in value]
+            if field == "design_references":
+                new = list(dict.fromkeys(new))
+        else:
+            continue
+        if new != value:
+            item[field] = new
+            changed = True
+    return changed
+
+
+def legacy_mentions(root: Path) -> list[str]:
+    paths = [root / "AGENTS.md", root / "README.md", root / "CLAUDE.md"]
+    paths += sorted((root / "docs").rglob("*.md")) if (root / "docs").is_dir() else []
+    paths += sorted((root / "backlog").glob("*.md")) if (root / "backlog").is_dir() else []
+    found = []
+    for path in paths:
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError):
+            continue
+        for number, line in enumerate(lines, 1):
+            if LEGACY_REFERENCE.search(line):
+                found.append(f"{path.relative_to(root)}:{number}: {shorten(line.strip())}")
+    return found
+
+
+def cmd_migrate_docs(store: Store, args) -> int:
+    store.require_loaded()
+    root = store.root
+    for folder in DOC_FOLDERS.values():
+        if (root / folder).is_dir() and any((root / folder).glob("*.md")):
+            raise BacklogError(f"{folder}/ already contains files: migrate only once")
+    sources = {path: root / path for path in (LEGACY_REQUIREMENTS, LEGACY_DESIGN) if (root / path).exists()}
+    if not sources:
+        raise BacklogError(f"neither {LEGACY_REQUIREMENTS} nor {LEGACY_DESIGN} found")
+    migration = DocsMigration()
+    if LEGACY_REQUIREMENTS in sources:
+        migration.split_requirements(sources[LEGACY_REQUIREMENTS].read_text(encoding="utf-8"))
+    if LEGACY_DESIGN in sources:
+        migration.split_design(sources[LEGACY_DESIGN].read_text(encoding="utf-8"))
+    files = migration.rendered()
+
+    unresolved: set = set()
+    changed = [item["id"] for item in store.items.values() if rewrite_item(migration, item, unresolved)]
+    blocking = list(migration.problems)
+    blocking += [f"{where}: {message}" for where, message in validate(store, Docs(files))]
+    if blocking:
+        for message in blocking:
+            print(message)
+        print(f"migration refused: {len(blocking)} problem(s), nothing was written")
+        return 1
+
+    for path in sorted(files):
+        print(f"{path}: {len(files[path].splitlines())} lines")
+    print(f"{len(changed)} item(s) with rewritten references: {', '.join(sorted(changed, key=item_key)) or 'none'}")
+    for reference in sorted(unresolved):
+        print(f"unresolved reference left as it is: {reference}")
+    if args.dry_run:
+        print("dry run: nothing was written")
+        return 0
+
+    for path, text in files.items():
+        (root / path).parent.mkdir(parents=True, exist_ok=True)
+        write_atomic(root / path, text)
+    for item_id in changed:
+        store.write("items", store.items[item_id])
+    for source in sources.values():
+        source.unlink()
+    for mention in legacy_mentions(root):
+        print(f"update by hand: {mention}")
+    errors = validate(Store(root))
+    for where, message in errors:
+        print(f"{where}: {message}")
+    if errors:
+        print("migration written but check failed: review docs/ and backlog/")
+        return 1
+    print("check OK. Review the new files, then condense them to the current state (docs/PROCESS.md §5.3).")
+    return 0
+
+
 # --- Command line -----------------------------------------------------------
 
 
@@ -1460,7 +1858,8 @@ def build_parser() -> argparse.ArgumentParser:
     show = reading(commands, "show", cmd_show, "one item in full")
     show.add_argument("id")
     reading(commands, "export", cmd_export, "whole backlog on stdout, never committed")
-    reading(commands, "check", cmd_check, "validate the store", branches=False)
+    reading(commands, "check", cmd_check, "validate the store and the references to docs/", branches=False)
+    reading(commands, "docs", cmd_docs, "list requirements and design topics of docs/", branches=False)
     list_file_parser(commands, "notes", "NOTES.md", "read or change the cross-cutting notes")
     list_file_parser(commands, "ideas", "IDEAS.md", "read or change the unassigned ideas")
 
@@ -1518,6 +1917,12 @@ def build_parser() -> argparse.ArgumentParser:
     importer.add_argument(
         "--skip-unrecognized", action="store_true", help="import anyway, listing the lines that are left out",
     )
+
+    migrate = writing(
+        commands, "migrate-docs", cmd_migrate_docs,
+        "split docs/REQUIREMENTS.md and docs/TECHNICAL-DESIGN.md into docs/requirements/ and docs/design/",
+    )
+    migrate.add_argument("--dry-run", action="store_true", help="validate and report, write nothing")
 
     close = writing(commands, "close-version", cmd_close_version, "close a version whose items are finished")
     close.add_argument("id")

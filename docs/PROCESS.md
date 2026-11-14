@@ -25,15 +25,17 @@ If `AGENTS.md` §10 turns on `Shared claims` or `Parallel work`, read `docs/PROC
 | --- | --- |
 | `AGENTS.md` | project-specific rules: stack, architecture, domain, quality gate, language |
 | `docs/PROCESS.md`, `docs/PROCESS-PARALLEL.md` | workflow rules |
-| `docs/REQUIREMENTS.md` | the *what* |
-| `docs/TECHNICAL-DESIGN.md` | the *how*, in numbered sections; optional module catalog in §3 |
+| `docs/requirements/` | the *what*: one file per requirement (§5.1) |
+| `docs/design/` | the *how*: one file per topic, optional module catalog in `modules.md` (§5.2) |
 | `docs/adr/`, `docs/spikes/` | decisions and research outcomes |
 | `backlog/` | canonical work state |
 | `CHANGELOG.md` | user-visible changes per released version |
 | `README.md` | presentation, setup and usage; no process rules, item states or agent instructions |
 
 - Agents read and change `backlog/` **only** through the CLI (`python3 .agents/tools/backlog.py`, written `backlog` here and in the skills; Python 3.10+) and never read, search or edit its files directly. The only exception is resolving a merge conflict (§6.3).
-- A requirement change is recorded first in `docs/REQUIREMENTS.md`, then in `backlog/` and, if needed, in the design. Design choices are recorded together with the item that introduces them.
+- Requirements and design are split into small files so that agents load only what a task needs: `backlog docs` lists them, and an agent reads the files that the item references, never whole folders.
+- A requirement change is recorded first in `docs/requirements/`, then in `backlog/` and, if needed, in the design. Design choices are recorded together with the item that introduces them.
+- Adopting a new version of the template (process, skills, tools) is a `task/` item that references the process sections it adopts; it needs no requirement, because the process is not part of the product. The adopted version is the `Process version` of this file.
 
 ## 4. Backlog model
 
@@ -66,9 +68,10 @@ Thematic containers (`EPIC-001`) with a title and a scope. No state, acceptance 
 `backlog add --help`, `backlog edit --help` and `backlog show` give the fields; the CLI rejects invalid records.
 
 - Every User Story and Bug assigned to a version references at least one requirement. Technical items reference the design or process sections they produce or change.
+- `requirements` lists requirement IDs, each the file `docs/requirements/<ID>.md`. `design_references` lists design topics as `design/<topic>` (the file `docs/design/<topic>.md`), other files of `docs/requirements/` as `requirements/<name>`, ADRs (`ADR-NNN`) and sections of the process or of `AGENTS.md` (`PROCESS §N`, `AGENTS §N`). `backlog check` rejects a `design/` or `requirements/` reference whose file does not exist, and an open item that references a `Withdrawn` requirement.
 - Acceptance criteria are concrete and verifiable. Avoid wording such as "works well".
 - `remarks` holds information that fits no other field, such as a later decision about the item.
-- `module` is optional and independent of the epic; it need not be a Git submodule. Do not invent one: it must be in `docs/TECHNICAL-DESIGN.md` §3, with a stable ID (`MOD-001`), sequential and never reused, a name, a responsibility and its location when known.
+- `module` is optional and independent of the epic; it need not be a Git submodule. Do not invent one: it must be in `docs/design/modules.md`, with a stable ID (`MOD-001`), sequential and never reused, a name, a responsibility and its location when known.
 - Dates in `backlog/` come from the CLI. Dates in `CHANGELOG.md` are read with `date +%F`. Never estimate or infer a date.
 
 ### 4.5 States
@@ -83,14 +86,24 @@ An item whose dependencies are not `Done` is not started. If the user explicitly
 
 ## 5. Requirements and design
 
-### 5.1 Requirements IDs
+### 5.1 Requirements
 
-Functional `REQ-<AREA>-NNN`, non-functional `REQ-NFR-NNN`. IDs are stable and never reused; a removed requirement is marked `Withdrawn` with the reason.
+- `docs/requirements/README.md` holds the target version, goal, actors, scope in and out of the open version and the requirement areas; `glossary.md` the glossary; `acceptance.md` the release acceptance of the open version.
+- One file per requirement, `docs/requirements/<ID>.md`, copied from `_TEMPLATE.md`: first line `# <ID> — <title>`, then `**State:** Active` or `**State:** Withdrawn`.
+- IDs: functional `REQ-<AREA>-NNN`, non-functional `REQ-NFR-NNN`. IDs are stable and never reused; a removed requirement keeps its file, marked `Withdrawn` with the reason.
 
 ### 5.2 Technical design
 
-- Before designing or implementing an item, read its requirements and design references and, if it has a `module`, its entry in `docs/TECHNICAL-DESIGN.md` §3.
+- `docs/design/README.md` holds the target version, the initial architectural decisions and the open decisions with the items that will close them. Every other file is one topic, `docs/design/<topic>.md` in lowercase kebab-case, copied from `_TEMPLATE.md`, first line `# <title>`. The optional module catalog is `docs/design/modules.md`.
+- A topic covers one subject; when it grows to cover more, split it and update the references of the open items.
+- Before designing or implementing an item, read the files of its requirements and design references and, if it has a `module`, its entry in `docs/design/modules.md`.
 - Use an ADR (`docs/adr/ADR-NNN-slug.md`) for decisions with relevant alternatives or long-term consequences.
+
+### 5.3 Writing requirements and design
+
+- They describe the current state of the product, not its history: when an item changes a requirement or a design choice, rewrite the text, do not append to it.
+- No item IDs, dates, decision narratives or verification evidence in them, except the items that will close an open decision. History lives in the backlog (`remarks`, `outcome`, scope changes), in ADRs and in git.
+- Scope and release acceptance hold only the open version: closing a version removes those of the closed one (§9).
 
 ## 6. Git workflow
 
@@ -141,12 +154,12 @@ If a criterion cannot be met, the item is not `Done`: keep working, mark it `Blo
 
 ## 9. Closing a version
 
-Only on explicit user request, and only when every item is `Done` or `Dropped`, the release acceptance criteria in `docs/REQUIREMENTS.md` are satisfied, and the closing gate and all integration suites pass on an up-to-date `main`. The procedure is in the `close-version` skill.
+Only on explicit user request, and only when every item is `Done` or `Dropped`, the release acceptance criteria in `docs/requirements/acceptance.md` are satisfied, and the closing gate and all integration suites pass on an up-to-date `main`. Closing also compacts requirements and design (§5.3): the scope and acceptance of the closed version are removed and the files changed during the version are condensed to the current state. The procedure is in the `close-version` skill.
 
 ## 10. Agent operating loop
 
 1. At the start of a session, run `backlog status`, then `backlog show` for the relevant items.
-2. Before working on an item, read its requirements and design references.
+2. Before working on an item, read the files of its requirements and design references, and only those.
 3. New work not in the backlog is added first (and to requirements if it changes behavior).
 4. If a request is ambiguous, conflicts with documents or changes the scope of the version, ask before acting.
 5. Report outcomes faithfully: failing tests, skipped steps and unverified behavior are stated explicitly.
