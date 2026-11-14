@@ -42,4 +42,4 @@ Optional mode in which one agent, the orchestrator, runs several items at the sa
   - only the orchestrator merges, in the main clone, one item at a time and only on explicit user request (`docs/PROCESS.md` §6.3 unchanged);
   - a conflict in `backlog/` is resolved as in `docs/PROCESS.md` §6.3. Any other conflict that is not trivially resolvable is reported to the user.
 - **Cleanup:** after a verified merge and the deletion of the item branch, the orchestrator ends the worker's agent and removes its clone. It never removes a clone that has uncommitted changes or commits not contained in a remote branch; it reports such a clone to the user instead.
-- The worker agent command comes from `AGENTS.md` §10 (`Worker agent command`, default `pi --approve`). How agents are started and followed is tooling (the `orchestrate` skill) and does not change these rules.
+- The worker agent command comes from `AGENTS.md` §10 (`Worker agent command`, default `pi --approve`); an orchestrator running in Claude Code starts its workers as Claude Code sessions instead. How agents are started and followed is tooling (the `orchestrate` skill) and does not change these rules.
