@@ -96,7 +96,6 @@ An item whose dependencies are not `Done` is not started. If the user explicitly
 
 - `docs/design/README.md` holds the target version, the initial architectural decisions and the open decisions with the items that will close them. Every other file is one topic, `docs/design/<topic>.md` in lowercase kebab-case, copied from `_TEMPLATE.md`, first line `# <title>`. The optional module catalog is `docs/design/modules.md`.
 - A topic covers one subject; when it grows to cover more, split it and update the references of the open items.
-- Before designing or implementing an item, read the files of its requirements and design references and, if it has a `module`, its entry in `docs/design/modules.md`.
 - Use an ADR (`docs/adr/ADR-NNN-slug.md`) for decisions with relevant alternatives or long-term consequences.
 
 ### 5.3 Writing requirements and design
@@ -111,7 +110,7 @@ An item whose dependencies are not `Done` is not started. If the user explicitly
 
 - `main` is always releasable. Every item is developed in its own branch from an up-to-date `main`: `<prefix><ID>-<short-slug>`, slug in lowercase kebab-case. One item per branch.
 - A new item of any type is added only on a clean, up-to-date `main`, with `git pull --ff-only` when an upstream exists. If that is not the state, stop and ask the user; do not switch branches, stash or discard changes.
-- Each addition is exactly one documentation-only `docs(<ID>)` commit directly on `main`, with the new item and its requirements and design updates. No branch or merge. If `main` has an upstream, it must have no other unpushed commits before the addition, and the commit is pushed at once so that every clone sees it; a rejected push is rebased with `git pull --rebase`, checked with `backlog check` and pushed again, or reported on conflict. This is the only automatic push of `main`.
+- Each addition is exactly one documentation-only `docs(<ID>)` commit directly on `main`, with the new item and its requirements and design updates. No branch or merge. If `main` has an upstream, it must have no other unpushed commits before the addition, and the commit is pushed at once so that every clone sees it (procedure in `add-item`). This is the only automatic push of `main`.
 - If an item branch reveals a new dependency, do not add that item there: preserve the work and ask the user to return to a clean `main`.
 - Other backlog grooming uses a `backlog/<short-slug>` branch, merged like an item branch, with commit type `docs` and the main item touched as scope. Release branches are `release/vX.Y.Z`.
 
@@ -122,7 +121,7 @@ An item whose dependencies are not `Done` is not started. If the user explicitly
 ### 6.3 Merge
 
 - Merging into `main` is **never automatic**: leave the work committed in the item branch and wait for an explicit user request before merging or pushing to `main`.
-- The closing gate before merge and push runs only lint, typecheck, build and in-memory unit tests as specified in `AGENTS.md`.
+- The closing gate (§8) passes on `main` before the merge is pushed.
 - `git merge --no-ff` with message `merge(<ID>): <item title>`.
 - The merge commit contains only the merge and its conflict resolution. Fix errors on the branch first.
 - If a record in `backlog/` conflicts, keep both sides' changes in that file, or the lines of both sides in `NOTES.md` and `IDEAS.md`, then run `backlog check`.
@@ -130,7 +129,7 @@ An item whose dependencies are not `Done` is not started. If the user explicitly
 
 ## 7. Project status
 
-The status is computed from `backlog/` and never stored. `backlog status` shows, in a size that does not grow with the backlog: open versions with progress, items in progress and blocked, next ready items, last completed items, closed versions and notes. `backlog list`, `ready` and `show` give the rest. `backlog export` prints everything as Markdown for a human.
+The status is computed from `backlog/` and never stored: `backlog status` gives a summary whose size does not grow with the backlog, `list`, `ready` and `show` the rest, and `export` everything as Markdown for a human.
 
 Notes (`backlog notes`) are at most a few lines of cross-cutting information. Per-item details belong in the item's `outcome`.
 
@@ -141,10 +140,10 @@ Notes (`backlog notes`) are at most a few lines of cross-cutting information. Pe
 An item is `Done` only when:
 
 1. all acceptance criteria are satisfied;
-2. the closing quality gate in `AGENTS.md` passes: lint, typecheck, build and in-memory unit tests only;
-3. new behavior is covered by tests at the cheapest level that proves it, bugs have a regression test, and integration and end-to-end tests are run separately whenever needed to prove the criteria;
+2. the closing gate of `AGENTS.md` §6 passes: lint, typecheck, build and in-memory unit tests only, which run without test-created processes, filesystem, git, network or Docker (installing dependencies and compiling are preparation). The same gate runs before a merge is pushed and when closing a version; adding a backlog item needs no gate;
+3. new behavior is covered by tests at the cheapest level that proves it, bugs have a regression test, and integration and end-to-end suites are run separately, during the item, whenever needed to prove the criteria; they are not part of the closing gate;
 4. no secrets are in files, commits or logs;
-5. requirements, design, ADRs, configuration examples and README are updated where needed;
+5. requirements, design, ADRs, configuration examples and README are updated where needed, requirements and design describing the current state (§5.3);
 6. a line is added under `[Unreleased]` in `CHANGELOG.md` for user-visible changes;
 7. the item is `Done` with its `outcome`, and `backlog check` passes;
 8. all the work is committed in the item's branch;
@@ -154,7 +153,7 @@ If a criterion cannot be met, the item is not `Done`: keep working, mark it `Blo
 
 ## 9. Closing a version
 
-Only on explicit user request, and only when every item is `Done` or `Dropped`, the release acceptance criteria in `docs/requirements/acceptance.md` are satisfied, and the closing gate and all integration suites pass on an up-to-date `main`. Closing also compacts requirements and design (§5.3): the scope and acceptance of the closed version are removed and the files changed during the version are condensed to the current state. The procedure is in the `close-version` skill.
+Only on explicit user request, and only when every item is `Done` or `Dropped`, the release acceptance criteria in `docs/requirements/acceptance.md` are satisfied, and the closing gate and all integration suites pass on an up-to-date `main`. Closing also compacts requirements and design (§5.3). The procedure is in the `close-version` skill.
 
 ## 10. Agent operating loop
 

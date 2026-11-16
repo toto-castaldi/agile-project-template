@@ -14,7 +14,7 @@ Rules: `docs/PROCESS.md` §4.1, §9. `backlog` is `python3 .agents/tools/backlog
 2. Every item assigned to the version is `Done` or `Dropped` (`backlog list --version vX.Y.Z`). List any that are not and stop.
 3. No item branch of this version is still unmerged (`git branch -a --no-merged main`). Report any and stop.
 4. Walk through the release acceptance criteria in `docs/requirements/acceptance.md`: for each, give evidence. Stop if any is not met, unless the user explicitly decides otherwise (record that decision with `backlog notes --add`).
-5. Run the closing quality gate from `AGENTS.md` §6 on `main` (lint, typecheck, build and in-memory unit tests only), and separately run all integration suites listed there. Verify external-service end-to-end evidence separately as required by release acceptance. Stop if any required check fails.
+5. Run the closing gate of `AGENTS.md` §6 on `main` and all the integration suites listed there; verify the end-to-end evidence that release acceptance requires. Stop if any required check fails.
 
 ## 2. Release branch
 

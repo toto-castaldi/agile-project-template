@@ -4,7 +4,7 @@
 
 ## 0. Process
 
-This project follows the shared process in [`docs/PROCESS.md`](docs/PROCESS.md). Read it before doing any work: it defines backlog, items, states, branches, commits, merges, project status, the Definition of Done and version closing.
+This project follows the shared process in [`docs/PROCESS.md`](docs/PROCESS.md). Read it before doing any work.
 
 This file contains only project-specific rules. Where it conflicts with `docs/PROCESS.md`, the process wins unless the deviation is listed in [Process overrides](#8-process-overrides).
 
@@ -20,7 +20,7 @@ At the start of every session run `python3 .agents/tools/backlog.py status`, the
 ## 2. Language
 
 - **Project language:** `<e.g. Italian>`
-- Write project content (requirements, design, backlog text, notes, README, CHANGELOG, commit descriptions, user-facing messages) in the project language, as defined in `docs/PROCESS.md` §2.
+- Project content (`docs/PROCESS.md` §2) and user-facing messages are written in the project language.
 - Code identifiers and code comments: `<e.g. English>`.
 
 ## 3. Scope
@@ -48,7 +48,7 @@ Architecture and module boundaries: `<short description, details in docs/design/
 
 ## 6. Quality gate
 
-The closing gate for items, merges and pushes of merges to `main` runs only (adding a backlog item is documentation only and needs no gate):
+Closing gate (`docs/PROCESS.md` §8):
 
 ```bash
 <lint command>
@@ -57,11 +57,9 @@ The closing gate for items, merges and pushes of merges to `main` runs only (add
 <build command>
 ```
 
-Prepare dependencies separately using `<install command>`. Unit tests run in memory without test-created processes, filesystem, git, network or Docker; dependency installation and compilation are preparation, not test behavior.
+Preparation: `<install command>`.
 
-Run integration and end-to-end suites separately during an item when needed to prove acceptance criteria or project-specific DoD. Run all integration suites at version closure and in CI; evaluate end-to-end evidence requiring external services or credentials separately as required by release acceptance.
-
-Separate test commands and guidelines: `<integration and end-to-end commands, prerequisites, and any rule such as "do not mock the database to claim constraints are verified">`.
+Integration and end-to-end suites: `<commands, prerequisites, and any rule such as "do not mock the database to claim constraints are verified">`.
 
 ## 7. Definition of Done additions
 
