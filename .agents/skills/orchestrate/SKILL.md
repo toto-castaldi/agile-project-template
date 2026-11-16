@@ -74,7 +74,7 @@ For each item the user chose:
        --cwd <Workspace root>/<ID> "$SHELL" -ic '"$@"' _ <worker command> "<task>"
      ```
 
-     - `<name>` is the item ID in lowercase (`us-004`): hc names allow only `a-z 0-9 - _`.
+     - `<name>` is `<repo>-<id>`: `<id>` is the item ID in lowercase (`us-004`), `<repo>` the repository name (the last part of the origin URL without `.git`) in lowercase, with every character other than `a-z 0-9 - _` replaced by `-` and cut so that the whole name has at most 32 characters (`shop-api-us-004`). hc names allow only `a-z 0-9 - _` and must be unique among all live terminals of the machine: the repository part keeps workers of different projects with the same item ID apart. Use the same name in every later `hc` command for that worker.
      - `<space>` is the `herdr.space` label of your own terminal (`hc get "$HC_TERMINAL_ID" --json`, `labels`). It gives the worker its own tab in the same Herdr space. If your terminal has no such label, omit `--label`: the worker runs without a tab and the user can follow it with `hc attach <name>`.
      - `"$SHELL" -ic '"$@"' _` runs the worker command in the user's interactive shell, so it gets the same `PATH` and credentials as a terminal opened by hand. Without it, agents installed through version managers may fail to start or find no credentials.
      - `--no-parent` makes the worker a top-level terminal: it keeps running when the orchestrator session ends, and Herdr shows its finished turns as `done` to the user. A child terminal of the orchestrator would go straight to `idle`, because hc treats a child's finished turn as news for its parent. Without a parent, hc types no notes about the worker into your terminal and `hc wait --children` does not see it: you follow workers through their reports and the checks of §4.
@@ -99,7 +99,7 @@ Never block while workers run: the user must be able to work with you (for examp
   - While workers run, you may do backlog work that stays on `main`, as in Herdr mode.
   - Background commands may end with your session. If the orchestrator session was restarted, find the workers from the clones under `Workspace root` that have `.git/orchestrate-session`. A worker with no running turn (`pgrep -f <session id>` finds nothing) whose last turn ended without a report was probably interrupted: read its log and the branch, and resume it only with the user's agreement ("Continue <ID> where you stopped.").
 - **Manual mode.** Wait for the user to relay reports; read the state from the item branches (§2).
-- If the orchestrator session was restarted (Herdr mode), workers keep running but their reports go to the old address. Find them with `hc ls` (names = item IDs) and tell each new address with `hc send <name> "From now on report to <new address>"`.
+- If the orchestrator session was restarted (Herdr mode), workers keep running but their reports go to the old address. Find them with `hc ls` (names `<repo>-<id>`, §3) and tell each new address with `hc send <name> "From now on report to <new address>"`.
 - **Ready**: check that the branch is on `origin` in `In Progress`, show the plan to the user and wait for their go (§5). Never give the go on your own.
 - **Blocked**: report the item, its `Blocked by` and the worker's last lines to the user. Answer the worker only with the user's decision (`hc send <name> "…"`, or a new turn in Claude Code mode, §3).
 
