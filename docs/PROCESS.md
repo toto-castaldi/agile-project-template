@@ -33,7 +33,7 @@ If `AGENTS.md` §10 turns on `Shared claims` or `Parallel work`, read `docs/PROC
 | `README.md` | presentation, setup and usage; no process rules, item states or agent instructions |
 
 - Agents read and change `backlog/` **only** through the CLI (`python3 .agents/tools/backlog.py`, written `backlog` here and in the skills; Python 3.10+) and never read, search or edit its files directly. The only exception is resolving a merge conflict (§6.3).
-- Requirements and design are split into small files so that agents load only what a task needs: `backlog docs` lists them, and an agent reads the files that the item references, never whole folders.
+- Requirements and design are split into small files so that agents load only what a task needs: `backlog docs` lists them, `backlog docs --for <ID>` lists the files an item references, and an agent reads those files, never whole folders.
 - A requirement change is recorded first in `docs/requirements/`, then in `backlog/` and, if needed, in the design. Design choices are recorded together with the item that introduces them.
 - Adopting a new version of the template (process, skills, tools) is a `task/` item that references the process sections it adopts; it needs no requirement, because the process is not part of the product. The adopted version is the `Process version` of this file.
 
@@ -159,7 +159,7 @@ Only on explicit user request, and only when every item is `Done` or `Dropped`, 
 ## 10. Agent operating loop
 
 1. At the start of a session, run `backlog status`, then `backlog show` for the relevant items.
-2. Before working on an item, read the files of its requirements and design references, and only those.
+2. Before working on an item, read the files listed by `backlog docs --for <ID>`, and only those.
 3. New work not in the backlog is added first (and to requirements if it changes behavior).
 4. If a request is ambiguous, conflicts with documents or changes the scope of the version, ask before acting.
 5. Report outcomes faithfully: failing tests, skipped steps and unverified behavior are stated explicitly.

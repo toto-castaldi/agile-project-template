@@ -1493,8 +1493,73 @@ def requirement_key(requirement_id: str) -> tuple:
     return (area == "NFR", area, int(number))
 
 
+SECTION_REFERENCE = re.compile(r"^(PROCESS|AGENTS) §(\d+(?:\.\d+)*)$")
+SECTION_FILES = {"PROCESS": "docs/PROCESS.md", "AGENTS": "AGENTS.md"}
+ADR_REFERENCE = re.compile(r"^ADR-\d{3,}$")
+
+
+def item_files(root: Path, docs: Docs, item: dict) -> tuple[list[dict], list[str]]:
+    """Files to read before working on an item, in the order of its fields, and the references that resolve to none."""
+    files, unresolved = [], []
+    for requirement in item.get("requirements") or []:
+        found = (docs.requirements or {}).get(str(requirement))
+        if found:
+            files.append({"reference": found["id"], "path": found["path"]})
+        else:
+            unresolved.append(str(requirement))
+    for reference in item.get("design_references") or []:
+        reference = str(reference)
+        section = SECTION_REFERENCE.match(reference)
+        if is_doc_reference(reference) and docs.resolves(reference):
+            folder, _, name = reference.partition("/")
+            files.append({"reference": reference, "path": f"{DOC_FOLDERS[folder]}/{name}.md"})
+        elif section:
+            files.append({"reference": reference, "path": SECTION_FILES[section[1]], "section": section[2]})
+        elif ADR_REFERENCE.match(reference):
+            matches = sorted((root / "docs" / "adr").glob(f"{reference}-*.md")) + sorted((root / "docs" / "adr").glob(f"{reference}.md"))
+            if matches:
+                files.append({"reference": reference, "path": matches[0].relative_to(root).as_posix()})
+            else:
+                unresolved.append(reference)
+        else:
+            unresolved.append(reference)
+    module = item.get("module")
+    if module:
+        if docs.modules is not None:
+            files.append({"reference": str(module), "path": MODULES_FILE, "entry": str(module)})
+        else:
+            unresolved.append(str(module))
+    return files, unresolved
+
+
+def print_item_files(store: Store, docs: Docs, item_id: str, as_json: bool) -> int:
+    store.require_loaded()
+    item = store.item(item_id)
+    files, unresolved = item_files(store.root, docs, item)
+    if as_json:
+        print(json.dumps({"item": item["id"], "files": files, "unresolved": unresolved}, ensure_ascii=False, indent=2))
+        return 0
+    print(f"Files to read for {item['id']}:")
+    for entry in files:
+        where = entry["path"]
+        if "section" in entry:
+            where += f" §{entry['section']}"
+        if "entry" in entry:
+            where += f", entry {entry['entry']}"
+        print(f"- {where}")
+    if not files:
+        print("- none")
+    if unresolved:
+        print("Not resolved to a file:")
+        for reference in unresolved:
+            print(f"- {reference}")
+    return 0
+
+
 def cmd_docs(store: Store, args) -> int:
     docs = Docs.load(store.root)
+    if args.for_item:
+        return print_item_files(store, docs, args.for_item, args.json)
     requirements = sorted((docs.requirements or {}).values(), key=lambda r: requirement_key(r["id"]))
     design = sorted((docs.design or {}).values(), key=lambda d: d["reference"])
     if args.json:
@@ -1859,7 +1924,8 @@ def build_parser() -> argparse.ArgumentParser:
     show.add_argument("id")
     reading(commands, "export", cmd_export, "whole backlog on stdout, never committed")
     reading(commands, "check", cmd_check, "validate the store and the references to docs/", branches=False)
-    reading(commands, "docs", cmd_docs, "list requirements and design topics of docs/", branches=False)
+    docs = reading(commands, "docs", cmd_docs, "list requirements and design topics of docs/", branches=False)
+    docs.add_argument("--for", dest="for_item", metavar="ID", help="only the files an item needs: requirements, design references, ADRs, sections, module catalog")
     list_file_parser(commands, "notes", "NOTES.md", "read or change the cross-cutting notes")
     list_file_parser(commands, "ideas", "IDEAS.md", "read or change the unassigned ideas")
 

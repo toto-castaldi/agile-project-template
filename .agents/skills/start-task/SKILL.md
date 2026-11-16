@@ -43,7 +43,7 @@ For a `Blocked` item being resumed, switch to its existing branch and rebase or 
 
 ## 4. Prepare the work
 
-1. Read only the files referenced by the item: `docs/requirements/<ID>.md` for each requirement, `docs/<folder>/<name>.md` for each `design/` or `requirements/` reference, the ADRs and process sections it cites and, if assigned, its module entry in `docs/design/modules.md`. Do not load whole folders; `backlog docs` lists the files if you need to find a related one.
+1. Run `backlog docs --for <ID>` and read the files it lists, and only those: for a file with a section (`docs/PROCESS.md §5`), only that section; for the module catalog, only the entry of the item's module. Report the references it cannot resolve to a file. Do not load whole folders; `backlog docs` lists all the files if you need to find a related one.
 2. Summarize to the user: goal, acceptance criteria, planned approach, open questions.
 3. If the user asked to implement the item, proceed; otherwise stop here.
 
