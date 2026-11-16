@@ -1,6 +1,6 @@
 ---
 name: add-item
-description: Add one new User Story, Task, Spike or Bug to the backlog on main, recording the requirement first when behavior changes, assigning epic, version, priority, dependencies and and acceptance criteria. Use when a request needs a new backlog item.
+description: Add one new User Story, Task, Spike or Bug to the backlog on main, recording the requirement first when behavior changes, assigning epic, version, priority, dependencies and acceptance criteria. Use when a request needs a new backlog item.
 ---
 
 # Add an item to the backlog

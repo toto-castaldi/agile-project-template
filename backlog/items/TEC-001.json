@@ -11,7 +11,15 @@
     "PROCESS §3",
     "PROCESS §4",
     "PROCESS §5",
-    "AGENTS (all sections)"
+    "AGENTS §1",
+    "AGENTS §2",
+    "AGENTS §3",
+    "AGENTS §4",
+    "AGENTS §5",
+    "AGENTS §6",
+    "AGENTS §7",
+    "AGENTS §9",
+    "AGENTS §10"
   ],
   "description": "Initialize the project from the template by interviewing the user. Run the `kickoff` skill.",
   "acceptance_criteria": [
