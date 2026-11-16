@@ -10,7 +10,8 @@
   "design_references": [
     "PROCESS §3",
     "PROCESS §4",
-    "PROCESS §5",
+    "process/backlog",
+    "process/docs",
     "AGENTS §1",
     "AGENTS §2",
     "AGENTS §3",

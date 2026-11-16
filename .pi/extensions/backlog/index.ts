@@ -90,7 +90,7 @@ interface ExportedStore {
 }
 
 // ---------------------------------------------------------------------------
-// Filters (values and order from docs/PROCESS.md §4.3, §4.5, §4.6)
+// Filters (values and order from docs/PROCESS.md §4.1, §4.2, §4.3)
 // ---------------------------------------------------------------------------
 
 const ALL = "all";

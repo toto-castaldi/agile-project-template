@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Orchestrate parallel work
 
-Rules: `docs/PROCESS.md` §6.3, `docs/PROCESS-PARALLEL.md` and `AGENTS.md` §10. `backlog` is `python3 .agents/tools/backlog.py`. Run only because the user explicitly asked. You are the **orchestrator**: you stay in the main clone on `main` and never implement items yourself. The user's arguments, if any, name the items to launch.
+Rules: `docs/process/git.md` §3, `docs/PROCESS-PARALLEL.md` and `AGENTS.md` §10. `backlog` is `python3 .agents/tools/backlog.py`. Run only because the user explicitly asked. You are the **orchestrator**: you stay in the main clone on `main` and never implement items yourself. The user's arguments, if any, name the items to launch.
 
 This file holds the steps common to every mode. How workers are started, followed, sent messages and ended depends on the mode chosen in §1 and is in one file per mode, beside this one: `.agents/skills/orchestrate/herdr.md`, `claude-code.md` or `manual.md`. Read only the file of the chosen mode; the steps below say which of its sections to apply.
 
@@ -79,7 +79,7 @@ The user may also give the go, or change the plan, directly in the worker (mode 
 
 ## 6. Merge
 
-Merge only on explicit user request, one item at a time, in this clone, following the `merge-task` procedure for the item branch (it fetches the branch from `origin`). A conflict in `backlog/` is resolved as in `docs/PROCESS.md` §6.3. Any other conflict that is not obvious: abort and report. If the item's records on the branch are wrong (for example a date), do not fix them in the merge: with the user's agreement, ask the worker to fix them with a commit on its branch (mode file, **Send**), on its report (§4) check the push, then merge. Then propose the next merge, if any.
+Merge only on explicit user request, one item at a time, in this clone, following the `merge-task` procedure for the item branch (it fetches the branch from `origin`). A conflict in `backlog/` is resolved as in `docs/process/git.md` §3. Any other conflict that is not obvious: abort and report. If the item's records on the branch are wrong (for example a date), do not fix them in the merge: with the user's agreement, ask the worker to fix them with a commit on its branch (mode file, **Send**), on its report (§4) check the push, then merge. Then propose the next merge, if any.
 
 ## 7. Clean up
 

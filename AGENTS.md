@@ -4,7 +4,7 @@
 
 ## 0. Process
 
-This project follows the shared process in [`docs/PROCESS.md`](docs/PROCESS.md). Read it before doing any work.
+This project follows the shared process in [`docs/PROCESS.md`](docs/PROCESS.md). Read it before doing any work; it says which files of `docs/process/` to read for each topic.
 
 This file contains only project-specific rules. Where it conflicts with `docs/PROCESS.md`, the process wins unless the deviation is listed in [Process overrides](#8-process-overrides).
 
@@ -48,7 +48,7 @@ Architecture and module boundaries: `<short description, details in docs/design/
 
 ## 6. Quality gate
 
-Closing gate (`docs/PROCESS.md` §8):
+Closing gate (`docs/PROCESS.md` §6):
 
 ```bash
 <lint command>
@@ -63,7 +63,7 @@ Integration and end-to-end suites: `<commands, prerequisites, and any rule such 
 
 ## 7. Definition of Done additions
 
-In addition to `docs/PROCESS.md` §8:
+In addition to `docs/PROCESS.md` §6:
 
 - `<e.g. migrations are reproducible from a clean environment and verified during the item against a real database>`
 - `<e.g. .env.example is updated when configuration changes>`

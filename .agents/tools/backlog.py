@@ -274,13 +274,31 @@ DOC_FOLDERS = {"requirements": REQUIREMENTS_DIR, "design": DESIGN_DIR}
 REQUIREMENT_STATES = ("Active", "Withdrawn")
 STATE_LINE = re.compile(r"^\*\*State:\*\*\s*(\S+)")
 OPEN_STATES = ("Todo", "In Progress", "Blocked")
+PROCESS_FILE = "docs/PROCESS.md"
+PROCESS_DIR = "docs/process"
+SECTION_HEADING = re.compile(r"^#{2,6}\s+(\d+(?:\.\d+)*)\.?\s")
+PROCESS_REFERENCE = re.compile(r"^(?:PROCESS|process/([a-z0-9]+(?:-[a-z0-9]+)*))(?: §(\d+(?:\.\d+)*))?$")
+
+
+def process_reference(reference: str) -> tuple[str, str | None] | None:
+    """(file, section) of a `PROCESS §N`, `process/<name>` or `process/<name> §N` reference."""
+    match = PROCESS_REFERENCE.match(reference)
+    if not match or (match[1] is None and match[2] is None):
+        return None
+    return (f"{PROCESS_DIR}/{match[1]}.md" if match[1] else PROCESS_FILE), match[2]
+
+
+def section_numbers(text: str) -> set[str]:
+    return {m[1] for m in map(SECTION_HEADING.match, text.splitlines()) if m}
 
 
 class Docs:
     """Requirement and design files, read from disk or built in memory by the migration."""
 
-    def __init__(self, files: dict[str, str], unreadable: tuple = ()):
+    def __init__(self, files: dict[str, str], unreadable: tuple = (), process: dict[str, set] | None = None):
         self.files = files
+        # Section numbers of the process files, by path; None when they were not read (in-memory migration).
+        self.process = process
         self.errors: list[tuple[str, str]] = [(path, "cannot be read as UTF-8 text") for path in unreadable]
         self.requirements = self._requirements()
         self.design = self._design()
@@ -299,7 +317,28 @@ class Docs:
                 except (OSError, UnicodeDecodeError):
                     files[f"{folder}/{path.name}"] = ""
                     unreadable.append(f"{folder}/{path.name}")
-        return cls(files, tuple(unreadable))
+        process = {}
+        candidates = [root / PROCESS_FILE] + sorted((root / PROCESS_DIR).glob("*.md"))
+        for path in candidates:
+            try:
+                process[path.relative_to(root).as_posix()] = section_numbers(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError):
+                continue
+        return cls(files, tuple(unreadable), process)
+
+    def process_error(self, reference: str) -> str | None:
+        """Why a process reference does not resolve, or None if it does or cannot be checked."""
+        target = process_reference(reference)
+        if target is None or self.process is None:
+            return None
+        path, section = target
+        if path not in self.process:
+            # A project may keep an older PROCESS.md elsewhere: only process/ files must exist.
+            return f"{path} does not exist" if path != PROCESS_FILE else None
+        if section is not None and section not in self.process[path]:
+            hint = " (a reference from before process 4.0.0? see backlog migrate-process)" if path == PROCESS_FILE else ""
+            return f"{path} has no section {section}{hint}"
+        return None
 
     def _in(self, folder: str) -> list[tuple[str, str, str]]:
         """(stem, path, text) of the content files of a folder, without README and _TEMPLATE-like files."""
@@ -422,9 +461,14 @@ def check_design_references(iid, item, docs, errors) -> None:
     if not isinstance(references, list):
         return
     for reference in references:
-        if isinstance(reference, str) and is_doc_reference(reference) and not docs.resolves(reference):
+        if not isinstance(reference, str):
+            continue
+        if is_doc_reference(reference) and not docs.resolves(reference):
             folder, _, name = reference.partition("/")
             errors.append((iid, f"design reference {reference!r}: {DOC_FOLDERS[folder]}/{name}.md does not exist"))
+        problem = docs.process_error(reference)
+        if problem:
+            errors.append((iid, f"design reference {reference!r}: {problem}"))
 
 
 def check_status(store, iid, item, prefix, errors) -> None:
@@ -1493,8 +1537,7 @@ def requirement_key(requirement_id: str) -> tuple:
     return (area == "NFR", area, int(number))
 
 
-SECTION_REFERENCE = re.compile(r"^(PROCESS|AGENTS) §(\d+(?:\.\d+)*)$")
-SECTION_FILES = {"PROCESS": "docs/PROCESS.md", "AGENTS": "AGENTS.md"}
+AGENTS_REFERENCE = re.compile(r"^AGENTS §(\d+(?:\.\d+)*)$")
 ADR_REFERENCE = re.compile(r"^ADR-\d{3,}$")
 
 
@@ -1509,12 +1552,18 @@ def item_files(root: Path, docs: Docs, item: dict) -> tuple[list[dict], list[str
             unresolved.append(str(requirement))
     for reference in item.get("design_references") or []:
         reference = str(reference)
-        section = SECTION_REFERENCE.match(reference)
+        process = process_reference(reference)
+        agents = AGENTS_REFERENCE.match(reference)
         if is_doc_reference(reference) and docs.resolves(reference):
             folder, _, name = reference.partition("/")
             files.append({"reference": reference, "path": f"{DOC_FOLDERS[folder]}/{name}.md"})
-        elif section:
-            files.append({"reference": reference, "path": SECTION_FILES[section[1]], "section": section[2]})
+        elif process and not docs.process_error(reference):
+            entry = {"reference": reference, "path": process[0]}
+            if process[1]:
+                entry["section"] = process[1]
+            files.append(entry)
+        elif agents:
+            files.append({"reference": reference, "path": "AGENTS.md", "section": agents[1]})
         elif ADR_REFERENCE.match(reference):
             matches = sorted((root / "docs" / "adr").glob(f"{reference}-*.md")) + sorted((root / "docs" / "adr").glob(f"{reference}.md"))
             if matches:
@@ -1847,7 +1896,90 @@ def cmd_migrate_docs(store: Store, args) -> int:
     if errors:
         print("migration written but check failed: review docs/ and backlog/")
         return 1
-    print("check OK. Review the new files, then condense them to the current state (docs/PROCESS.md §5.3).")
+    print("check OK. Review the new files, then condense them to the current state (docs/process/docs.md §3).")
+    return 0
+
+
+# --- Migration of PROCESS §N references to the 4.0.0 layout -----------------
+
+# Sections of docs/PROCESS.md before 4.0.0 and where their rules are now.
+PROCESS_SECTIONS_3 = {
+    "1": ["PROCESS §1"], "2": ["PROCESS §2"], "3": ["PROCESS §3"],
+    "4": ["PROCESS §4", "process/backlog"], "4.1": ["process/backlog §1"], "4.2": ["process/backlog §2"],
+    "4.3": ["PROCESS §4.1"], "4.4": ["process/backlog §3"], "4.5": ["PROCESS §4.2"], "4.6": ["PROCESS §4.3"],
+    "5": ["process/docs"], "5.1": ["process/docs §1"], "5.2": ["process/docs §2"], "5.3": ["process/docs §3"],
+    "6": ["PROCESS §5", "process/git"], "6.1": ["PROCESS §5.1", "process/git §1"], "6.2": ["PROCESS §5.2"],
+    "6.3": ["PROCESS §5.3", "process/git §3"],
+    "7": ["process/backlog §4"], "8": ["PROCESS §6"], "9": ["process/release"], "10": ["PROCESS §7"],
+}
+OLD_PROCESS_REFERENCE = re.compile(r"^PROCESS §(\d+(?:\.\d+)*)$")
+PROCESS_MENTION = re.compile(r"PROCESS(?:\.md)?`?\s*§\s*\d")
+
+
+def process_mentions(root: Path) -> list[str]:
+    """Lines outside the process files that cite a section of PROCESS.md, to check by hand."""
+    paths = [root / "AGENTS.md", root / "README.md", root / "CLAUDE.md"]
+    if (root / "docs").is_dir():
+        paths += [p for p in sorted((root / "docs").rglob("*.md"))
+                  if p.relative_to(root).as_posix() != PROCESS_FILE and PROCESS_DIR not in p.relative_to(root).as_posix()
+                  and p.name != "PROCESS-PARALLEL.md"]
+    found = []
+    for path in paths:
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError):
+            continue
+        for number, line in enumerate(lines, 1):
+            if PROCESS_MENTION.search(line):
+                found.append(f"{path.relative_to(root)}:{number}: {shorten(line.strip())}")
+    return found
+
+
+def cmd_migrate_process(store: Store, args) -> int:
+    store.require_loaded()
+    root = store.root
+    if not (root / PROCESS_DIR).is_dir():
+        raise BacklogError(f"{PROCESS_DIR}/ not found: copy the process files of the template first")
+    for iid, item in store.items.items():
+        if any(str(r).startswith("process/") for r in item.get("design_references") or []):
+            raise BacklogError(f"{iid} already has process/ references: migrate only once")
+    changes, unresolved = {}, set()
+    for iid, item in store.items.items():
+        references = item.get("design_references") or []
+        new = []
+        for reference in references:
+            match = OLD_PROCESS_REFERENCE.match(str(reference))
+            if not match:
+                new.append(reference)
+            elif match[1] in PROCESS_SECTIONS_3:
+                new.extend(PROCESS_SECTIONS_3[match[1]])
+            else:
+                new.append(reference)
+                unresolved.add(str(reference))
+        new = list(dict.fromkeys(new))
+        if new != references:
+            changes[iid] = (references, new)
+    for iid in sorted(changes, key=item_key):
+        old, new = changes[iid]
+        print(f"{iid}: {', '.join(map(str, old))} -> {', '.join(map(str, new))}")
+    print(f"{len(changes)} item(s) with rewritten references")
+    for reference in sorted(unresolved):
+        print(f"unknown section left as it is: {reference}")
+    if args.dry_run:
+        print("dry run: nothing was written")
+        return 0
+    for iid, (_, new) in changes.items():
+        store.items[iid]["design_references"] = new
+        store.write("items", store.items[iid])
+    for mention in process_mentions(root):
+        print(f"check by hand: {mention}")
+    errors = validate(Store(root))
+    for where, message in errors:
+        print(f"{where}: {message}")
+    if errors:
+        print("migration written but check failed: review backlog/")
+        return 1
+    print("check OK")
     return 0
 
 
@@ -1989,6 +2121,11 @@ def build_parser() -> argparse.ArgumentParser:
         "split docs/REQUIREMENTS.md and docs/TECHNICAL-DESIGN.md into docs/requirements/ and docs/design/",
     )
     migrate.add_argument("--dry-run", action="store_true", help="validate and report, write nothing")
+    process = writing(
+        commands, "migrate-process", cmd_migrate_process,
+        "rewrite PROCESS §N references of the items from the numbering before 4.0.0; run once, after copying the process files",
+    )
+    process.add_argument("--dry-run", action="store_true", help="report the rewrites, write nothing")
 
     close = writing(commands, "close-version", cmd_close_version, "close a version whose items are finished")
     close.add_argument("id")

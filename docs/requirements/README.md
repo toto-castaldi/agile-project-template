@@ -4,7 +4,7 @@
 
 **State:** `<draft | baseline>`
 
-The *what* of the project, one file per requirement (`docs/PROCESS.md` §5.1). The *how* is in `docs/design/`. Every change of scope or behavior is recorded here before updating backlog and implementation (`docs/PROCESS.md` §3, §5). List the requirements with `python3 .agents/tools/backlog.py docs`; read only the files you need.
+The *what* of the project, one file per requirement (`docs/process/docs.md` §1). The *how* is in `docs/design/`. Every change of scope or behavior is recorded here before updating backlog and implementation (`docs/PROCESS.md` §3, `docs/process/docs.md`). List the requirements with `python3 .agents/tools/backlog.py docs`; read only the files you need.
 
 | File | Content |
 | --- | --- |

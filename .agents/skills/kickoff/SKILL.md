@@ -7,7 +7,7 @@ description: Initialize a project created from agile-project-template by intervi
 
 Turn the template into a real project. The output is documentation only: no application code, no scaffold (the scaffold is a backlog item of its own).
 
-Read `docs/PROCESS.md` and `AGENTS.md` first. Every rule there applies. `backlog` is `python3 .agents/tools/backlog.py`.
+Read `docs/PROCESS.md`, the files of `docs/process/` (the kickoff touches every topic) and `AGENTS.md` first. Every rule there applies. `backlog` is `python3 .agents/tools/backlog.py`.
 
 ## 1. Preconditions
 
@@ -44,8 +44,8 @@ Before writing, summarize the understanding in a few bullets and get the user's 
 
 Write in the project language, keeping structural tokens in English (`docs/PROCESS.md` §2).
 
-1. `docs/requirements/` (`docs/PROCESS.md` §5.1) — in `README.md` goal, actors, scope in/out and functional areas, state `baseline`; `glossary.md`; `acceptance.md` with the release acceptance of v0.1.0; one file per requirement copied from `_TEMPLATE.md`, functional (`REQ-<AREA>-NNN`) and non-functional (`REQ-NFR-NNN`), with stable IDs. Keep the requirement files added during planning.
-2. `docs/design/` (`docs/PROCESS.md` §5.2) — in `README.md` the initial architectural decisions with rationale and the open decisions with the items that will close them; one file per topic (context, modules, data model if known, …). Preserve any module catalog recorded during planning in `modules.md` and complete it as agreed; if the project has no named modules, delete `modules.md`. Fill the topics known now, leave those not yet known short and explicit ("defined by TEC-00N"), and delete those the project will not need. Item design references name topics as `design/<topic>`.
+1. `docs/requirements/` (`docs/process/docs.md` §1) — in `README.md` goal, actors, scope in/out and functional areas, state `baseline`; `glossary.md`; `acceptance.md` with the release acceptance of v0.1.0; one file per requirement copied from `_TEMPLATE.md`, functional (`REQ-<AREA>-NNN`) and non-functional (`REQ-NFR-NNN`), with stable IDs. Keep the requirement files added during planning.
+2. `docs/design/` (`docs/process/docs.md` §2) — in `README.md` the initial architectural decisions with rationale and the open decisions with the items that will close them; one file per topic (context, modules, data model if known, …). Preserve any module catalog recorded during planning in `modules.md` and complete it as agreed; if the project has no named modules, delete `modules.md`. Fill the topics known now, leave those not yet known short and explicit ("defined by TEC-00N"), and delete those the project will not need. Item design references name topics as `design/<topic>`.
 3. `AGENTS.md` — fill every section, including §10 (`Shared claims` and `Parallel work` `on` or `off` from the interview, `Workspace root` with the repository name, `Worker agent command`), remove all `<placeholders>` and the "Template not initialized" notice. Keep it short: only project-specific rules.
 4. Backlog (with the CLI):
    - set the goal of v0.1.0 with `backlog version edit v0.1.0 --goal …`;

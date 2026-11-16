@@ -8,11 +8,11 @@ Optional rule for agents working in parallel in separate clones or directories. 
 
 - Shared claims require an `origin` remote. Without one, report that claims cannot be shared and continue as with shared claims off.
 - Before starting a `Todo` item, run `git fetch --prune origin` and check that no local or remote branch exists for the same ID (any branch named `<prefix><ID>-…`). If one exists, stop and report the branch, the date and the author of its last commit. Continue only if the user explicitly asks, and then switch to that branch instead of creating a new one. If the fetch fails, report it and ask before starting.
-- Push the **item branch** right after every commit that changes the item's state in that branch: start (`In Progress`), `Blocked`, resume and `Done`. Use `git push -u origin <branch>` for the first push. `main` is pushed automatically only after adding an item (`docs/PROCESS.md` §6.1); merges follow `docs/PROCESS.md` §6.3 unchanged.
+- Push the **item branch** right after every commit that changes the item's state in that branch: start (`In Progress`), `Blocked`, resume and `Done`. Use `git push -u origin <branch>` for the first push. `main` is pushed automatically only after adding an item (`docs/process/git.md` §1); merges follow `docs/process/git.md` §3 unchanged.
 - If a push fails, keep the local commit, report that the claim is not shared, and do not start or continue the implementation until the user decides.
-- The claim ends when the merged branch is deleted from the remote (`docs/PROCESS.md` §6.3).
+- The claim ends when the merged branch is deleted from the remote (`docs/process/git.md` §3).
 - `--branches` (on `status`, `list`, `ready`, `show` and `export`) is the cross-clone view: it runs `git fetch --prune origin` (10 s timeout; `--no-fetch` skips it) and shows each item as it is on its item branch. Without the option, the backlog reflects only the current checkout. The rules:
-  - item branches are the local and remote-tracking branches named `<prefix><ID>-…` (`docs/PROCESS.md` §6.1) that are not merged into local `main` or into a remote's default branch;
+  - item branches are the local and remote-tracking branches named `<prefix><ID>-…` (`docs/PROCESS.md` §5.1) that are not merged into local `main` or into a remote's default branch;
   - a local branch wins over the remote-tracking branch with the same name;
   - on an item branch, its own item keeps the working-tree copy;
   - with several branches for one ID, the one with the most recent commit wins; `show` lists it with the others, `export --json` gives them under `branches`;
@@ -25,7 +25,7 @@ Optional mode in which one agent, the orchestrator, runs several items at the sa
 
 - **Roles:**
   - the **orchestrator** works in the main clone, always on a clean `main`. It selects, launches and follows workers, relays the user's go, merges and cleans up. It never implements items;
-  - the orchestrator does not block while workers run: it follows them through their reports and stays available to the user. Meanwhile it may do backlog work that stays on `main` (adding items, `docs/PROCESS.md` §6.1, or planning items not yet launched), never implementation and never a branch switch. A report that arrives during such work is handled as soon as the current step ends;
+  - the orchestrator does not block while workers run: it follows them through their reports and stays available to the user. Meanwhile it may do backlog work that stays on `main` (adding items, `docs/process/git.md` §1, or planning items not yet launched), never implementation and never a branch switch. A report that arrives during such work is handled as soon as the current step ends;
   - each **worker** handles exactly one item, in its own clone.
 - **Workspaces:**
   - one `git clone` from `origin` per item, in `<Workspace root>/<ID>/`. `Workspace root` comes from `AGENTS.md` §10; default `../<repo-name>-work`, relative to the main clone;
@@ -37,9 +37,9 @@ Optional mode in which one agent, the orchestrator, runs several items at the sa
   - after the go it implements the item and completes it with the `finish-task` procedure, pushing the item branch on every state change (§1);
   - workers never merge, never push `main`, never remove clones and never start other agents;
   - they report `ready`, `done` or `blocked`, with a short detail, to the orchestrator.
-- **Release:** a claimed item that never received the go can be released on explicit user request, as an exception to `docs/PROCESS.md` §6.3: only if its branch contains nothing but the start commit, the orchestrator ends the worker, deletes the item branch locally and on `origin`, and removes the clone (same checks as the cleanup). On `main` the item is still `Todo`.
+- **Release:** a claimed item that never received the go can be released on explicit user request, as an exception to `docs/process/git.md` §3: only if its branch contains nothing but the start commit, the orchestrator ends the worker, deletes the item branch locally and on `origin`, and removes the clone (same checks as the cleanup). On `main` the item is still `Todo`.
 - **Merge:**
-  - only the orchestrator merges, in the main clone, one item at a time and only on explicit user request (`docs/PROCESS.md` §6.3 unchanged);
-  - a conflict in `backlog/` is resolved as in `docs/PROCESS.md` §6.3. Any other conflict that is not trivially resolvable is reported to the user.
+  - only the orchestrator merges, in the main clone, one item at a time and only on explicit user request (`docs/process/git.md` §3 unchanged);
+  - a conflict in `backlog/` is resolved as in `docs/process/git.md` §3. Any other conflict that is not trivially resolvable is reported to the user.
 - **Cleanup:** after a verified merge and the deletion of the item branch, the orchestrator ends the worker's agent and removes its clone. It never removes a clone that has uncommitted changes or commits not contained in a remote branch; it reports such a clone to the user instead.
 - The worker agent command comes from `AGENTS.md` §10 (`Worker agent command`, default `pi --approve`). Workers run unattended, so the command must start without interactive prompts: `--approve` makes pi trust the project-local files of the clone for that run only. An orchestrator running in Claude Code ignores this setting: its workers are Claude Code sessions started with `--dangerously-skip-permissions`. How agents are started and followed is tooling (the `orchestrate` skill) and does not change these rules.

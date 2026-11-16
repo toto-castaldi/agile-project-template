@@ -27,10 +27,11 @@ Python 3.10 or newer, standard library only: the backlog lives in `backlog/` and
 
 ```text
 AGENTS.md                  project-specific rules for agents (filled at kickoff)
-CLAUDE.md                  imports AGENTS.md and docs/PROCESS.md for Claude Code
+CLAUDE.md                  imports AGENTS.md and docs/PROCESS.md (the core) for Claude Code
 backlog/                   product backlog: versions, epics, items (one JSON file each), notes, ideas
 CHANGELOG.md               changes per released version
-docs/PROCESS.md            the shared process (identical in every project)
+docs/PROCESS.md            the shared process: rules every session needs (identical in every project)
+docs/process/              detailed rules read on demand: backlog, docs, git, release
 docs/PROCESS-PARALLEL.md   optional rules for shared claims and parallel work
 docs/requirements/         the *what*: README (goal, actors, scope), glossary, acceptance, one file per REQ-*
 docs/design/               the *how*: README (decisions, open decisions), one file per topic (design/<topic>)
@@ -101,7 +102,7 @@ docs/spikes/               spike reports
 - Commits: `type(ID): description` in the project language.
 - Rules and structural labels in English; project content in the project language.
 
-Full rules: [`docs/PROCESS.md`](docs/PROCESS.md).
+Full rules: [`docs/PROCESS.md`](docs/PROCESS.md), with the details in [`docs/process/`](docs/process/).
 
 ## Updating the process in existing projects
 
@@ -111,6 +112,12 @@ To move a project from `docs/REQUIREMENTS.md` and `docs/TECHNICAL-DESIGN.md` to 
 
 1. Run `python3 .agents/tools/backlog.py migrate-docs --dry-run`, then again without `--dry-run`. It moves every requirement heading (`REQ-…`) to its own file, with `**State:** Withdrawn` for those under `Withdrawn requirements`; the glossary to `glossary.md`, the release acceptance to `acceptance.md` and the rest of the requirements to `README.md`. Each `##` section of the design becomes a topic file (the template sections get the names of the template: `context`, `modules`, `data-model`, `invariants`, `integrations`, `security`, `test-strategy`, `configuration`; others a slug of their heading), except the initial and open decisions, which go to `docs/design/README.md`. It rewrites the references in the items (`TECHNICAL-DESIGN §N` becomes `design/<topic>`, `REQUIREMENTS §N` the matching `requirements/<name>`) and refuses, writing nothing, if a requirement or module referenced by an item would be lost. It removes the two old files and lists the remaining mentions to update by hand (for example in `AGENTS.md`); references to sections it cannot map are reported and left as they are.
 2. Update `AGENTS.md` §1, §3 and §4 as in the template and fix the listed mentions.
-3. Condense the new files to the current state (`docs/PROCESS.md` §5.3): remove item IDs, dates, decision narratives, evidence and the scope of closed versions; split topics that cover more than one subject. Requirements that only record earlier template upgrades can be marked `Withdrawn` (`docs/PROCESS.md` §3).
+3. Condense the new files to the current state (`docs/process/docs.md` §3): remove item IDs, dates, decision narratives, evidence and the scope of closed versions; split topics that cover more than one subject. Requirements that only record earlier template upgrades can be marked `Withdrawn` (`docs/PROCESS.md` §3).
 
-`docs/PROCESS.md`, `docs/PROCESS-PARALLEL.md`, `.agents/skills/`, `.agents/tools/` and `.gitattributes` are project-agnostic. To bring process improvements from the template into an existing project, copy them over in a `task/` item and check the `Process version` at the top of `docs/PROCESS.md`. The pi extensions in `.pi/extensions/` are project-agnostic too and can be copied the same way, together with the `.pi/*` / `!.pi/extensions/` rules of `.gitignore`; so is the Claude Code backlog pane in `.agents/skills/backlog-overlay/`, with the `.claude-plugin/types/` rule of `.gitignore`. Projects that use modules can then document them in `docs/design/modules.md` and assign them to items; existing projects without modules need no module catalog. To adopt shared claims, add `## 10. Parallel work` with `` - **Shared claims:** `on` `` to the project's `AGENTS.md`; without that section they stay off. To adopt parallel work as well, add `` - **Parallel work:** `on` `` (and optionally `Workspace root` and `Worker agent command`) to the same section; without it, parallel work stays off. Workers run unattended: if the project sets `Worker agent command` to plain `pi`, change it to `pi --approve`, or each worker stops on the folder trust dialog.
+To move a project to the process split into `docs/PROCESS.md` and `docs/process/` (template 4.0.0 and later), in a `task/` item after copying the project-agnostic files:
+
+1. Run `python3 .agents/tools/backlog.py migrate-process --dry-run`, check the rewrites it lists, then run it again without `--dry-run`, once. It rewrites the `PROCESS §N` references of the items from the old numbering to the new one (for example `PROCESS §6.3` becomes `PROCESS §5.3` and `process/git §3`, `PROCESS §8` becomes `PROCESS §6`), leaves unknown sections as they are and lists the lines of `AGENTS.md`, `README.md` and `docs/` that cite a section of `PROCESS.md`.
+2. Fix those lines by hand with the same mapping (for example `AGENTS.md` §6 and §7 cite the Definition of Done, now `docs/PROCESS.md` §6).
+3. Run `backlog check`: it now rejects a `PROCESS §N` or `process/<name> §N` whose section does not exist.
+
+`docs/PROCESS.md`, `docs/process/`, `docs/PROCESS-PARALLEL.md`, `.agents/skills/`, `.agents/tools/` and `.gitattributes` are project-agnostic. To bring process improvements from the template into an existing project, copy them over in a `task/` item and check the `Process version` at the top of `docs/PROCESS.md`. The pi extensions in `.pi/extensions/` are project-agnostic too and can be copied the same way, together with the `.pi/*` / `!.pi/extensions/` rules of `.gitignore`; so is the Claude Code backlog pane in `.agents/skills/backlog-overlay/`, with the `.claude-plugin/types/` rule of `.gitignore`. Projects that use modules can then document them in `docs/design/modules.md` and assign them to items; existing projects without modules need no module catalog. To adopt shared claims, add `## 10. Parallel work` with `` - **Shared claims:** `on` `` to the project's `AGENTS.md`; without that section they stay off. To adopt parallel work as well, add `` - **Parallel work:** `on` `` (and optionally `Workspace root` and `Worker agent command`) to the same section; without it, parallel work stays off. Workers run unattended: if the project sets `Worker agent command` to plain `pi`, change it to `pi --approve`, or each worker stops on the folder trust dialog.

@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Merge an item into main
 
-Rules: `docs/PROCESS.md` §6.3. `backlog` is `python3 .agents/tools/backlog.py`. Merging is never automatic: run this only because the user explicitly asked. The user's arguments, if any, identify the item or branch; otherwise use the current branch.
+Rules: `docs/process/git.md` §3; read it first. `backlog` is `python3 .agents/tools/backlog.py`. Merging is never automatic: run this only because the user explicitly asked. The user's arguments, if any, identify the item or branch; otherwise use the current branch.
 
 ## 1. Checks
 
@@ -27,14 +27,14 @@ For a grooming branch `backlog/<slug>`, use `merge(<ID>): <short description>` w
 
 Conflicts:
 
-- In `backlog/`, keep both sides' changes in the record (`docs/PROCESS.md` §6.3), then run `backlog check` before committing the merge.
+- In `backlog/`, keep both sides' changes in the record (`docs/process/git.md` §3), then run `backlog check` before committing the merge.
 - In `CHANGELOG.md`, keep all lines from both sides under `[Unreleased]`.
 - Change nothing beyond the conflict resolution.
 - For code conflicts, resolve them only if the resolution is obvious; otherwise abort the merge (`git merge --abort`) and ask the user.
 
 ## 3. Verify and publish
 
-1. Run the closing gate of `AGENTS.md` §6 on `main` (`docs/PROCESS.md` §8). If it fails, do not push: report and ask the user how to proceed.
+1. Run the closing gate of `AGENTS.md` §6 on `main` (`docs/PROCESS.md` §6). If it fails, do not push: report and ask the user how to proceed.
 2. `git push origin main` (if a remote exists).
 
 ## 4. Clean up

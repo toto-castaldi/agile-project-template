@@ -5,7 +5,7 @@ description: Start a backlog item (US, TEC, SPIKE or BUG) - check dependencies, 
 
 # Start an item
 
-Rules: `docs/PROCESS.md` §4, §6, §7 and `AGENTS.md`. `backlog` is `python3 .agents/tools/backlog.py`. The user's arguments, if any, identify the item (e.g. `US-004`); without arguments, propose the first item of `backlog ready` and ask for confirmation.
+Rules: `docs/PROCESS.md` §4, §5, §7 and `AGENTS.md`. `backlog` is `python3 .agents/tools/backlog.py`. The user's arguments, if any, identify the item (e.g. `US-004`); without arguments, propose the first item of `backlog ready` and ask for confirmation.
 
 ## 1. Checks
 
@@ -43,7 +43,7 @@ For a `Blocked` item being resumed, switch to its existing branch and rebase or 
 
 ## 4. Prepare the work
 
-1. Run `backlog docs --for <ID>` and read the files it lists, and only those: for a file with a section (`docs/PROCESS.md §5`), only that section; for the module catalog, only the entry of the item's module. Report the references it cannot resolve to a file. Do not load whole folders; `backlog docs` lists all the files if you need to find a related one.
+1. Run `backlog docs --for <ID>` and read the files it lists, and only those: for a file with a section (`docs/PROCESS.md §4`), only that section; for the module catalog, only the entry of the item's module. Report the references it cannot resolve to a file. Do not load whole folders; `backlog docs` lists all the files if you need to find a related one.
 2. Summarize to the user: goal, acceptance criteria, planned approach, open questions.
 3. If the user asked to implement the item, proceed; otherwise stop here.
 
