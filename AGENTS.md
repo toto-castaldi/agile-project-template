@@ -82,13 +82,9 @@ None.
 
 ## 10. Parallel work
 
-If either setting below is `on`, read `docs/PROCESS-PARALLEL.md` before working on an item.
+Settings of `docs/PROCESS-PARALLEL.md`, which explains them; read it before working on an item if `Shared claims` or `Parallel work` is `on`.
 
 - **Shared claims:** `<on | off>`
 - **Parallel work:** `<on | off>`
 - **Workspace root:** `../<repo-name>-work`
 - **Worker agent command:** `pi --approve`
-
-With `Shared claims` `on`, item branches are pushed at every state change so that agents in other clones see which items are taken (`docs/PROCESS-PARALLEL.md` §1). Requires an `origin` remote.
-
-With `Parallel work` `on`, the `orchestrate` skill runs several items at once: one worker agent per item, started with `Worker agent command` in its own clone under `Workspace root` (`docs/PROCESS-PARALLEL.md` §2). Requires `Shared claims` `on`. Workers run unattended, so the command must start without interactive prompts: `--approve` makes pi trust the project-local files of the clone for that run only. An orchestrator running in Claude Code ignores this setting: its workers are Claude Code sessions started with `--dangerously-skip-permissions`.
