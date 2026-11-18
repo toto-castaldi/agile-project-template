@@ -10,7 +10,7 @@ Read by the `orchestrate` skill when it runs inside Claude Code without Herdr (`
 
 ## Start
 
-Report instruction for the task: "end your turn with a message whose last line is `<ID> ready|done|blocked: <detail>`".
+Report instruction for the task: "end your turn with a message whose last line is `<ID> started|ready|done|blocked: <detail>`".
 
 For each worker:
 
@@ -23,7 +23,7 @@ For each worker:
      | tee -a .git/orchestrate.log
    ```
 
-- `claude -p` runs one turn without a terminal: there is no folder trust dialog to answer and no tab to watch. The worker stops when its turn ends, so the `ready` report is its final message and the harness notifies you when the background command exits; the go resumes the same conversation (**Send**).
+- `claude -p` runs one turn without a terminal: there is no folder trust dialog to answer and no tab to watch. The worker stops when its turn ends, so a `ready` report is its final message and the harness notifies you when the background command exits; the go resumes the same conversation (**Send**). A worker that reports `started` goes on implementing in the same turn: the `started` line appears in its log, and its final message is the `done` or `blocked` report.
 - The output of every turn is appended to `.git/orchestrate.log` in the clone: read it with `tail -n 60 <clone>/.git/orchestrate.log`.
 
 Check the start: do not wait. A worker that cannot start (login, unknown option, …) exits at once and its background command reports the error; tell the user.

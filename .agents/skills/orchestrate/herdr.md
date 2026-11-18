@@ -14,7 +14,7 @@ Each worker is an hc terminal named `<repo>-<id>`: `<id>` is the item ID in lowe
 
 ## Start
 
-Report instruction for the task: `hc send <orchestrator address> "<ID> ready|done|blocked: <detail>"`, where the orchestrator address is `$HC_TERMINAL_ID`.
+Report instruction for the task: `hc send <orchestrator address> "<ID> started|ready|done|blocked: <detail>"`, where the orchestrator address is `$HC_TERMINAL_ID`.
 
 Start the worker with:
 
@@ -27,9 +27,9 @@ hc run --bg --json --no-parent --name <name> --label herdr.space=<space> \
 - `"$SHELL" -ic '"$@"' _` runs the worker command in the user's interactive shell, so it gets the same `PATH` and credentials as a terminal opened by hand. Without it, agents installed through version managers may fail to start or find no credentials.
 - `--no-parent` makes the worker a top-level terminal: it keeps running when the orchestrator session ends, and Herdr shows its finished turns as `done` to the user. A child terminal of the orchestrator would go straight to `idle`, because hc treats a child's finished turn as news for its parent. Without a parent, hc types no notes about the worker into your terminal and `hc wait --children` does not see it: you follow workers through their reports and the checks of **Follow**.
 
-Check the start: `hc wait <name> --timeout 60`, then `hc read <name> --lines 40`. If the agent shows a dialog (folder trust, login, …) or exited, tell the user and let them answer it in the worker's tab; send keys (`hc keys <name> …`) only with the user's agreement.
+Check the start: `hc wait <name> --timeout 60`, then `hc read <name> --lines 40`. If the agent shows a dialog (folder trust, login, …) or exited, tell the user and let them answer it in the worker's tab; send keys (`hc keys <name> …`) only with the user's agreement, except for the Claude Code folder trust dialog below.
 
-- A Claude Code worker always stops on the folder trust dialog in a new clone ("Is this a project you created or one you trust?", `--dangerously-skip-permissions` does not skip it). Before launching, ask the user once for the whole batch whether you may confirm it for the clones you just created; with their agreement, when the screen shows the dialog, select "Yes, I trust this folder" with `hc keys <name> down enter`, then read the screen again to check that the agent started on the task. Without it, the user confirms it in each tab.
+- A Claude Code worker always stops on the folder trust dialog in a new clone ("Is this a project you created or one you trust?", `--dangerously-skip-permissions` does not skip it, and "No, exit" is preselected). The clone was just made by you from `origin`, so confirm it without asking: when the screen shows the dialog, select "Yes, I trust this folder" with `hc keys <name> down enter`, then read the screen again to check that the agent started on the task. If the screen shows anything else (another dialog, a different folder), do not send keys: tell the user. If the user asked to confirm the dialog themselves, leave it to them in each tab.
 
 ## Follow
 
