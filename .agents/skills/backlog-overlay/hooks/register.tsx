@@ -17,6 +17,9 @@
  * start as `Type: all · Priority: all · Status: Todo` and are kept for the rest
  * of the Claude Code session.
  *
+ * Dependencies that are Done are dimmed; so is the ID in the title while any
+ * dependency of the item is not Done (the rule of `backlog ready` and `start`).
+ *
  * Item branches: states are resolved by the backlog CLI
  * (`export --json --branches`, rules in docs/PROCESS-PARALLEL.md §1), exactly as
  * in the pi overlay (.pi/extensions/backlog/). The pane shows the current
@@ -29,7 +32,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { BacklogData, BacklogField, BacklogFilters, BacklogItem } from '../types'
+import type { BacklogData, BacklogDependency, BacklogField, BacklogFilters, BacklogItem } from '../types'
 
 const PANE = 'backlog'
 const BACKLOG_TOOL = '.agents/tools/backlog.py'
@@ -52,7 +55,7 @@ const filtersAtom = atom({ plugin: 'backlog-overlay', key: 'filters' } as const,
 })
 const currentAtom = atom({ plugin: 'backlog-overlay', key: 'current' } as const, '', { shape: 'current-1' })
 const dataAtom = atom({ plugin: 'backlog-overlay', key: 'data' } as const, { kind: 'loading' } as BacklogData, {
-  shape: 'data-1',
+  shape: 'data-2',
 })
 
 // ---------------------------------------------------------------------------
@@ -95,12 +98,17 @@ const text = (value: unknown) => (value === undefined || value === null ? '' : S
 const strings = (value: unknown) => (Array.isArray(value) ? value.map(String) : [])
 
 function toItem(record: BacklogRecord, store: ExportedStore): BacklogItem {
+  // A dependency is satisfied when its item is Done, as for `backlog ready` and `start`.
+  const dependencies: BacklogDependency[] = strings(record.dependencies).map((id) => ({
+    id,
+    done: store.items.some((other) => text(other.id) === id && text(other.status) === 'Done'),
+  }))
   const fields: BacklogField[] = []
   for (const [label, field] of ITEM_LABELS) {
     const value = record[field]
     const shown = Array.isArray(value) ? value.join(', ') : text(value)
-    if (shown) fields.push({ label, value: shown })
-    else if (field === 'dependencies') fields.push({ label, value: 'none' })
+    if (field === 'dependencies') fields.push(shown ? { label, value: shown, dependencies } : { label, value: 'none' })
+    else if (shown) fields.push({ label, value: shown })
   }
   fields.push({ label: 'Acceptance criteria', list: strings(record.acceptance_criteria) })
   if (strings(record.remarks).length > 0) fields.push({ label: 'Remarks', list: strings(record.remarks) })
@@ -123,6 +131,7 @@ function toItem(record: BacklogRecord, store: ExportedStore): BacklogItem {
     priority: text(record.priority),
     status: text(record.status),
     fields,
+    unmetDependencies: dependencies.some((dependency) => !dependency.done),
     source: origin?.source,
     alsoIn: origin && origin.also_in.length > 0 ? origin.also_in : undefined,
   }
@@ -368,13 +377,20 @@ export const register: Register = (on) => {
           )}
         </Box>
         {controls}
-        <Text bold wrap="wrap">{`${item.id} — ${item.title}`}</Text>
+        <Text bold wrap="wrap">
+          <Text color={item.unmetDependencies ? 'inactive' : undefined}>{item.id}</Text>
+          {` — ${item.title}`}
+        </Text>
         <Box flexDirection="column">
           {item.fields.map((field) => (
             <Box flexDirection="column">
               <Text wrap="wrap">
                 <Text color="suggestion">{`${field.label}:`}</Text>
-                {field.value !== undefined && (
+                {field.dependencies ? (
+                  field.dependencies.map((dependency, i) => (
+                    <Text color={dependency.done ? 'inactive' : undefined}>{`${i === 0 ? ' ' : ', '}${dependency.id}`}</Text>
+                  ))
+                ) : field.value !== undefined && (
                   <Text
                     color={
                       field.label === 'Status'

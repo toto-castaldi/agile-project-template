@@ -16,6 +16,9 @@
  * start as `Type: all · Priority: all · Status: Todo`, are kept in memory for
  * the rest of the pi session and reset when pi restarts or on /reload.
  *
+ * Dependencies that are Done are muted; so is the ID in the title while any
+ * dependency of the item is not Done (the rule of `backlog ready` and `start`).
+ *
  * Item branches: states are resolved by the backlog CLI
  * (`export --json --branches`, rules in docs/PROCESS-PARALLEL.md §1): each item
  * is shown as it is on its unmerged item branch, local or remote-tracking, and the
@@ -48,8 +51,14 @@ const READ_TIMEOUT_MS = 5_000;
 const BRANCHES_TIMEOUT_MS = 30_000;
 
 interface BacklogItem {
+	/** Item ID, e.g. `US-001`. */
+	id: string;
 	/** Heading text after `#### `, e.g. `US-001 — Title`. */
 	heading: string;
+	/** Dependencies whose item is `Done`. */
+	doneDependencies: ReadonlySet<string>;
+	/** Some dependency is not `Done` (or not in the backlog). */
+	unmetDependencies: boolean;
 	/** Version heading text, e.g. `Version v0.1.0`, if the item is inside a version section. */
 	version?: string;
 	/** Value of `**State:**` of the version, e.g. `Open`. */
@@ -166,7 +175,7 @@ function strings(value: unknown): string[] {
 	return Array.isArray(value) ? value.map(String) : [];
 }
 
-function toBacklogItem(record: BacklogRecord, lookup: Lookup): BacklogItem {
+function toBacklogItem(record: BacklogRecord, lookup: Lookup, done: ReadonlySet<string>): BacklogItem {
 	const body: string[] = [];
 	for (const [label, field] of ITEM_LABELS) {
 		const value = record[field];
@@ -183,8 +192,13 @@ function toBacklogItem(record: BacklogRecord, lookup: Lookup): BacklogItem {
 	const epicId = record.epic ? String(record.epic) : undefined;
 	const epicTitle = epicId ? lookup.epics.get(epicId)?.title : undefined;
 	const versionState = versionId ? lookup.versions.get(versionId)?.state : undefined;
+	// A dependency is satisfied when its item is Done, as for `backlog ready` and `start`.
+	const dependencies = strings(record.dependencies);
 	return {
+		id: String(record.id),
 		heading: `${String(record.id)} — ${String(record.title)}`,
+		doneDependencies: new Set(dependencies.filter((id) => done.has(id))),
+		unmetDependencies: dependencies.some((id) => !done.has(id)),
 		version: versionId ? `Version ${versionId}` : undefined,
 		versionState: versionState ? String(versionState) : undefined,
 		epic: epicId ? `${epicId}${epicTitle ? ` — ${String(epicTitle)}` : ""}` : undefined,
@@ -205,9 +219,10 @@ function readFailure(error: unknown): string {
 function toItems(store: ExportedStore, lookup: Lookup): BacklogItem[] {
 	const order = (a: string | undefined, b: string | undefined) =>
 		(a ?? "\uffff").localeCompare(b ?? "\uffff", undefined, { numeric: true });
+	const done = new Set(store.items.filter((record) => record.status === "Done").map((record) => String(record.id)));
 	return store.items
 		.map((record) => {
-			const item = toBacklogItem(record, lookup);
+			const item = toBacklogItem(record, lookup, done);
 			const origin = store.branches?.items[String(record.id)];
 			if (!origin) return item;
 			return { ...item, source: origin.source, alsoIn: origin.also_in.length > 0 ? origin.also_in : undefined };
@@ -292,15 +307,27 @@ function styleInline(theme: Theme, text: string): string {
 		.replace(/\*\*([^*]+)\*\*/g, (_m, bold: string) => theme.bold(bold));
 }
 
-function styleValue(theme: Theme, label: string, value: string): string {
+/** `A, B, C`: the dependencies that are Done in the muted color. */
+function styleDependencies(theme: Theme, value: string, done: ReadonlySet<string>): string {
+	return value
+		.split(",")
+		.map((part) => part.trim())
+		.map((id) => (done.has(id) ? theme.fg("muted", id) : styleInline(theme, id)))
+		.join(", ");
+}
+
+function styleValue(theme: Theme, label: string, value: string, done: ReadonlySet<string>): string {
 	const key = label.toLowerCase();
+	if (key === "dependencies") return styleDependencies(theme, value, done);
 	if (key === "status") return styleStatus(theme, value);
 	if (key === "priority") return stylePriority(theme, value);
 	return styleInline(theme, value);
 }
 
+const NONE: ReadonlySet<string> = new Set();
+
 /** `**Label:** value · **Label:** value` → styled segments; null if the text has no field. */
-function styleFields(theme: Theme, text: string): string | null {
+function styleFields(theme: Theme, text: string, done: ReadonlySet<string> = NONE): string | null {
 	const re = /\*\*([^*:]+):\*\*\s*/g;
 	const matches = [...text.matchAll(re)];
 	if (matches.length === 0 || matches[0]!.index !== 0) return null;
@@ -311,13 +338,13 @@ function styleFields(theme: Theme, text: string): string | null {
 		const start = m.index! + m[0].length;
 		const end = i + 1 < matches.length ? matches[i + 1]!.index! : text.length;
 		const value = text.slice(start, end).replace(/\s*·\s*$/, "");
-		parts.push(theme.fg("accent", `${label}:`) + (value ? ` ${styleValue(theme, label, value)}` : ""));
+		parts.push(theme.fg("accent", `${label}:`) + (value ? ` ${styleValue(theme, label, value, done)}` : ""));
 	}
 	return parts.join(theme.fg("dim", " · "));
 }
 
 /** Wrap one Markdown body line to `width`, keeping list indentation as a hanging indent. */
-function renderBodyLine(theme: Theme, line: string, width: number): string[] {
+function renderBodyLine(theme: Theme, line: string, width: number, done: ReadonlySet<string> = NONE): string[] {
 	if (line.trim() === "") return [""];
 	const bullet = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/.exec(line);
 	let indent = "";
@@ -329,7 +356,7 @@ function renderBodyLine(theme: Theme, line: string, width: number): string[] {
 		marker = depth === 0 && styleFields(theme, bullet[3]!) !== null ? "" : `${theme.fg("dim", "•")} `;
 		content = bullet[3]!;
 	}
-	const styled = styleFields(theme, content) ?? styleInline(theme, content);
+	const styled = styleFields(theme, content, done) ?? styleInline(theme, content);
 	const prefixWidth = visibleWidth(indent) + visibleWidth(marker);
 	const wrapped = wrapTextWithAnsi(styled, Math.max(10, width - prefixWidth));
 	return wrapped.map((w, i) => (i === 0 ? indent + marker : " ".repeat(prefixWidth)) + w);
@@ -525,10 +552,13 @@ class BacklogOverlay {
 			const also = item.alsoIn ? th.fg("warning", `also in: ${item.alsoIn.join(", ")}`) : "";
 			origin.push(...wrapTextWithAnsi([from, also].filter(Boolean).join(th.fg("dim", " · ")), textW));
 		}
-		const title = wrapTextWithAnsi(th.bold(styleInline(th, item.heading)), textW);
+		// The ID in the muted color while some dependency is not Done.
+		const id = item.unmetDependencies ? th.fg("muted", item.id) : item.id;
+		const heading = id + styleInline(th, item.heading.slice(item.id.length));
+		const title = wrapTextWithAnsi(th.bold(heading), textW);
 
 		const body: string[] = [];
-		for (const l of item.body) body.push(...renderBodyLine(th, l, textW));
+		for (const l of item.body) body.push(...renderBodyLine(th, l, textW, item.doneDependencies));
 
 		const fixed = 2 /* borders */ + 2 /* header, filters */ + origin.length + 1 /* separator */ + title.length + 1 /* blank */ + 1 /* separator */ + 1 /* help */;
 		this.bodyHeight = Math.max(3, totalHeight - fixed);

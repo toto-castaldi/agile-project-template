@@ -74,6 +74,7 @@ docs/spikes/               spike reports
 - States come from item branches too, so parallel agents in different clones or directories see what the others have started. The overlay asks the backlog CLI (`export --json --branches`), which applies the rules of `docs/PROCESS-PARALLEL.md` §1: each item is shown as it is on its unmerged item branch, local or remote-tracking; a local branch wins over the remote-tracking one with the same name, and on an item branch its own item keeps the working-tree copy. Items that exist only in a branch are not shown.
 - At every opening, inside a git repository with a remote, the overlay opens at once with the current directory, then shows the states from the local refs, then `fetching…` while the CLI runs `git fetch --prune` (10 s timeout), and updates when the fetch completes, keeping the current item and the filters. If the fetch fails it shows `fetch failed: showing last known state`.
 - The header shows `from <ref>` when an item comes from a branch, and `also in: <refs>` when more than one unmerged branch carries it (the one with the most recent commit is shown). Filters apply to these resolved states.
+- Dependencies that are `Done` are shown in the muted color; while any dependency of an item is not `Done`, its ID in the title is muted too.
 - It never modifies files: state changes stay with the skills. The fetch updates only git refs.
 - pi loads project extensions only after the project is trusted. Projects that do not use pi can delete `.pi/extensions/`.
 
@@ -85,7 +86,7 @@ docs/spikes/               spike reports
 - `n`/`b` move to the next/previous item across epics and versions, `g`/`e` to the first/last one, the arrows scroll a long item.
 - `t`, `p` and `s` cycle the Type, Priority and Status filters, with the same values and defaults as the pi overlay; `x` resets them. They are kept for the rest of the Claude Code session.
 - `r` reads the backlog and the item branches again; `/backlog` on an open pane does the same.
-- States from item branches, `from <ref>`, `also in: <refs>`, `fetching…` and `fetch failed: showing last known state` work as in the pi overlay: both render the same `backlog export --json --branches` (`docs/PROCESS-PARALLEL.md` §1).
+- States from item branches, `from <ref>`, `also in: <refs>`, `fetching…`, `fetch failed: showing last known state` and the muted `Done` dependencies and IDs work as in the pi overlay: both render the same `backlog export --json --branches` (`docs/PROCESS-PARALLEL.md` §1).
 - It never modifies files; the fetch updates only git refs. Claude Code may write type declarations for editors into the plugin's `.claude-plugin/types/` when it loads it; `.gitignore` excludes them.
 - It is a plugin, not a skill: it has no `SKILL.md` and must never get one, so that pi and Claude Code do not list it as a skill. Projects that do not use Claude Code can delete the folder.
 
