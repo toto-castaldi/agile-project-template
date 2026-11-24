@@ -1,6 +1,6 @@
 # Development Process
 
-**Process version:** 4.2.0
+**Process version:** 4.3.0
 
 **Template:** https://github.com/toto-castaldi/agile-project-template
 
