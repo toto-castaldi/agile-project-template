@@ -41,7 +41,8 @@ docs/spikes/               spike reports
 .agents/skills/backlog-overlay/  Claude Code plugin (backlog pane), not a skill
 .agents/tools/backlog.py   CLI of the backlog: status, reading, state changes, check, docs listing
 .claude/skills             symlink to .agents/skills for Claude Code
-.pi/extensions/            pi extensions (backlog overlay)
+.claude/settings.json      Claude Code SessionStart hook (template check)
+.pi/extensions/            pi extensions (backlog overlay, template check)
 ```
 
 ## Skills
@@ -90,6 +91,15 @@ docs/spikes/               spike reports
 - It never modifies files; the fetch updates only git refs. Claude Code may write type declarations for editors into the plugin's `.claude-plugin/types/` when it loads it; `.gitignore` excludes them.
 - It is a plugin, not a skill: it has no `SKILL.md` and must never get one, so that pi and Claude Code do not list it as a skill. Projects that do not use Claude Code can delete the folder.
 
+## Template check at startup
+
+When pi or Claude Code starts in the project, it runs `python3 .agents/tools/backlog.py template-check`, which compares the `Process version` at the top of `docs/PROCESS.md` with the latest `vX.Y.Z` release tag of the repository named in the `Template` line below it (`git ls-remote`, 5 s timeout). If the project is behind, a warning names both versions, the semver level (a major release needs a migration) and the release notes; adopting the release is a `task/` item (`docs/PROCESS.md` §3).
+
+- pi: `.pi/extensions/template-check/` runs it in the background at startup (not on `/reload`, `/new`, `/resume` or a fork) and shows the message as a warning.
+- Claude Code: the `SessionStart` hook (`startup` only) in `.claude/settings.json` runs it with `--format claude-hook`, and Claude Code shows the message under the banner. Project hooks run only once the folder is trusted.
+- Up to date, offline or without a `Template` line, nothing is shown and startup is never blocked. Run the command by hand for the reason (`--format json` for every field).
+- The notice is informational: it never changes files. A project created from a fork of the template points the `Template` line at the fork. To turn the check off, delete the extension folder and the hook.
+
 ## Process in a nutshell
 
 - Item types: User Story `US-NNN`, Task `TEC-NNN`, Spike `SPIKE-NNN`, Bug `BUG-NNN`, grouped by thematic epics `EPIC-NNN`. Items may also reference an optional project module `MOD-NNN` defined in `docs/design/modules.md`; modules need not be Git submodules.
@@ -121,4 +131,4 @@ To move a project to the process split into `docs/PROCESS.md` and `docs/process/
 2. Fix those lines by hand with the same mapping (for example `AGENTS.md` §6 and §7 cite the Definition of Done, now `docs/PROCESS.md` §6).
 3. Run `backlog check`: it now rejects a `PROCESS §N` or `process/<name> §N` whose section does not exist.
 
-`docs/PROCESS.md`, `docs/process/`, `docs/PROCESS-PARALLEL.md`, `.agents/skills/`, `.agents/tools/` and `.gitattributes` are project-agnostic. To bring process improvements from the template into an existing project, copy them over in a `task/` item and check the `Process version` at the top of `docs/PROCESS.md`. The pi extensions in `.pi/extensions/` are project-agnostic too and can be copied the same way, together with the `.pi/*` / `!.pi/extensions/` rules of `.gitignore`; so is the Claude Code backlog pane in `.agents/skills/backlog-overlay/`, with the `.claude-plugin/types/` rule of `.gitignore`. Projects that use modules can then document them in `docs/design/modules.md` and assign them to items; existing projects without modules need no module catalog. To adopt shared claims, add `## 10. Parallel work` with `` - **Shared claims:** `on` `` to the project's `AGENTS.md`; without that section they stay off. To adopt parallel work as well, add `` - **Parallel work:** `on` `` (and optionally `Workspace root` and `Worker agent command`) to the same section; without it, parallel work stays off. Workers run unattended: if the project sets `Worker agent command` to plain `pi`, change it to `pi --approve`, or each worker stops on the folder trust dialog.
+`docs/PROCESS.md`, `docs/process/`, `docs/PROCESS-PARALLEL.md`, `.agents/skills/`, `.agents/tools/` and `.gitattributes` are project-agnostic. To bring process improvements from the template into an existing project, copy them over in a `task/` item and check the `Process version` at the top of `docs/PROCESS.md`. The pi extensions in `.pi/extensions/` are project-agnostic too and can be copied the same way, together with the `.pi/*` / `!.pi/extensions/` rules of `.gitignore`; so is the Claude Code backlog pane in `.agents/skills/backlog-overlay/`, with the `.claude-plugin/types/` rule of `.gitignore`, and the `SessionStart` hook of `.claude/settings.json` (merge it into the project's file if it already has one). The template check needs the `Template` line of `docs/PROCESS.md` (template 4.3.0 and later) and runs from the next start of pi or Claude Code. Projects that use modules can then document them in `docs/design/modules.md` and assign them to items; existing projects without modules need no module catalog. To adopt shared claims, add `## 10. Parallel work` with `` - **Shared claims:** `on` `` to the project's `AGENTS.md`; without that section they stay off. To adopt parallel work as well, add `` - **Parallel work:** `on` `` (and optionally `Workspace root` and `Worker agent command`) to the same section; without it, parallel work stays off. Workers run unattended: if the project sets `Worker agent command` to plain `pi`, change it to `pi --approve`, or each worker stops on the folder trust dialog.

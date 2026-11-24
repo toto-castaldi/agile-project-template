@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.agents/tools/backlog.py\" template-check --format claude-hook",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

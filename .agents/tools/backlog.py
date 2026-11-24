@@ -1983,6 +1983,79 @@ def cmd_migrate_process(store: Store, args) -> int:
     return 0
 
 
+# --- Template version -------------------------------------------------------
+
+
+PROCESS_VERSION_LINE = re.compile(r"^\*\*Process version:\*\*\s*`?v?(\d+)\.(\d+)\.(\d+)`?\s*$")
+TEMPLATE_LINE = re.compile(r"^\*\*Template:\*\*\s*<?`?([^`<>\s]+)`?>?\s*$")
+RELEASE_TAG = re.compile(r"^refs/tags/v(\d+)\.(\d+)\.(\d+)$")
+TEMPLATE_CHECK_TIMEOUT = 5
+
+
+def template_check(root: Path) -> dict:
+    """Compare the `Process version` of docs/PROCESS.md with the latest `vX.Y.Z` tag of its `Template`."""
+    report = {"state": "unknown", "current": None, "latest": None, "level": None, "template": None, "message": ""}
+    try:
+        lines = (root / PROCESS_FILE).read_text(encoding="utf-8").splitlines()
+    except OSError:
+        report["message"] = f"{PROCESS_FILE} not found"
+        return report
+    current = template = None
+    for line in lines[:20]:
+        if (match := PROCESS_VERSION_LINE.match(line.strip())) and current is None:
+            current = tuple(int(part) for part in match.groups())
+        elif (match := TEMPLATE_LINE.match(line.strip())) and template is None:
+            template = match[1]
+    if current is None or template is None:
+        missing = "Process version" if current is None else "Template"
+        report["message"] = f"no `{missing}` line at the top of {PROCESS_FILE}"
+        return report
+    report["current"], report["template"] = ".".join(map(str, current)), template
+    result = git(root, "ls-remote", "--tags", "--refs", template, "v*", timeout=TEMPLATE_CHECK_TIMEOUT)
+    if result.returncode != 0:
+        detail = result.stderr.strip().splitlines()
+        report["message"] = f"cannot read the releases of {template}" + (f": {detail[-1]}" if detail else "")
+        return report
+    tags = [
+        tuple(int(part) for part in match.groups())
+        for line in result.stdout.splitlines()
+        if len(fields := line.split()) == 2 and (match := RELEASE_TAG.match(fields[1]))
+    ]
+    if not tags:
+        report["message"] = f"no vX.Y.Z release tag in {template}"
+        return report
+    latest = max(tags)
+    report["latest"] = ".".join(map(str, latest))
+    if latest <= current:
+        report["state"] = "current"
+        report["message"] = f"process version {report['current']} is the latest release of {template}"
+        return report
+    level = "major" if latest[0] > current[0] else "minor" if latest[1] > current[1] else "patch"
+    report["state"], report["level"] = "behind", level
+    releases = f"{template.removesuffix('.git')}/releases" if template.startswith("https://github.com/") else template
+    upgrade = "it needs a migration: read the upgrade notes of every major release in between" if level == "major" else "backwards compatible"
+    report["message"] = (
+        f"Template update available: process version {report['latest']} ({level}, {upgrade}); "
+        f"this project uses {report['current']}. Release notes: {releases}. "
+        f"Adopt it in a task/ item ({PROCESS_FILE} §3)."
+    )
+    return report
+
+
+def cmd_template_check(store: Store, args) -> int:
+    report = template_check(store.root)
+    behind = report["state"] == "behind"
+    if args.format == "json":
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    elif args.format == "claude-hook":
+        # SessionStart hook of Claude Code: systemMessage is shown to the user, nothing otherwise.
+        if behind:
+            print(json.dumps({"systemMessage": report["message"]}, ensure_ascii=False))
+    elif behind or not args.quiet:
+        print(report["message"] if behind or report["state"] == "current" else f"cannot check: {report['message']}")
+    return 0
+
+
 # --- Command line -----------------------------------------------------------
 
 
@@ -2129,6 +2202,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     close = writing(commands, "close-version", cmd_close_version, "close a version whose items are finished")
     close.add_argument("id")
+
+    check_template = writing(
+        commands, "template-check", cmd_template_check,
+        "compare the Process version with the latest release of the template; never fails, read-only",
+    )
+    check_template.add_argument("--format", choices=("text", "json", "claude-hook"), default="text")
+    check_template.add_argument("--quiet", action="store_true", help="with text, print only when an update is available")
     return parser
 
 
