@@ -2065,19 +2065,46 @@ def add_item_options(parser: argparse.ArgumentParser, creating: bool) -> None:
     parser.add_argument("--epic", required=creating)
     parser.add_argument("--priority", required=creating, choices=None if not creating else PRIORITIES)
     parser.add_argument("--module")
-    parser.add_argument("--dependencies", help="comma-separated item IDs")
-    parser.add_argument("--requirements", help="comma-separated requirement IDs")
-    parser.add_argument("--design-references", dest="design_references", help="comma-separated references")
+    parser.add_argument("--dependencies", metavar="IDS", help="comma-separated item IDs")
+    parser.add_argument("--requirements", metavar="IDS", help="comma-separated requirement IDs")
+    parser.add_argument("--design-references", dest="design_references", metavar="REFS", help="comma-separated references")
     parser.add_argument("--description")
     parser.add_argument("--found-in", dest="found_in")
     parser.add_argument("--steps-to-reproduce", dest="steps_to_reproduce")
     parser.add_argument("--expected")
     parser.add_argument("--actual")
     parser.add_argument(
-        "--criterion", action="append", required=creating,
+        "--criterion", action="append", required=creating, metavar="TEXT",
         help="acceptance criterion, repeatable; with edit the given list replaces the existing one",
     )
-    parser.add_argument("--remark", action="append", help="free remark, repeatable; with edit the given list replaces the existing one")
+    parser.add_argument("--remark", action="append", metavar="TEXT", help="free remark, repeatable; with edit the given list replaces the existing one")
+
+
+COMPACT_HELP_INTRO = (
+    "Read and change the backlog store. One line per command; `<command> --help` explains its options.\n"
+    "IDS and REFS are comma-separated. --criterion and --remark are repeatable; with edit the given list replaces "
+    "the existing one. With edit an empty value clears an optional field."
+)
+
+
+def command_lines(parser: argparse.ArgumentParser, prefix: tuple[str, ...] = ()):
+    """Yield (command words, parser) for every leaf command, in definition order."""
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for name, child in action.choices.items():
+                yield from command_lines(child, prefix + (name,))
+            return
+    yield prefix, parser
+
+
+def compact_help(parser: argparse.ArgumentParser) -> str:
+    # One call gives the syntax of every command, so agents need not run --help per command.
+    lines = []
+    for words, child in command_lines(parser):
+        usage = re.sub(r"\s+", " ", child.format_usage()).strip()
+        usage = usage.removeprefix(f"usage: {child.prog}").replace(" [-h]", "").strip()
+        lines.append(f"  {' '.join(words)} {usage}".rstrip())
+    return f"usage: {parser.prog} <command> [options]\n\n{COMPACT_HELP_INTRO}\n\n" + "\n".join(lines) + "\n"
 
 
 def reading(subparsers, name: str, handler, help_text: str, branches: bool = True):
@@ -2209,6 +2236,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     check_template.add_argument("--format", choices=("text", "json", "claude-hook"), default="text")
     check_template.add_argument("--quiet", action="store_true", help="with text, print only when an update is available")
+    parser.format_help = lambda: compact_help(parser)
+    parser.format_usage = lambda: f"usage: {parser.prog} <command> [options] (--help lists the commands)\n"
     return parser
 
 

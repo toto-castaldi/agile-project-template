@@ -15,7 +15,7 @@ Thematic containers (`EPIC-001`) with a title and a scope. No state, acceptance 
 
 ## 3. Item fields
 
-`backlog add --help`, `backlog edit --help` and `backlog show` give the fields; the CLI rejects invalid records.
+`backlog --help` gives the syntax of every command in one call, `backlog <command> --help` explains its options and `backlog show` the fields of an item; the CLI rejects invalid records.
 
 - Every User Story and Bug assigned to a version references at least one requirement. Technical items reference the design or process sections they produce or change.
 - `requirements` lists requirement IDs, each the file `docs/requirements/<ID>.md`. `design_references` lists:

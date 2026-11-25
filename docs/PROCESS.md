@@ -43,7 +43,7 @@ Detailed rules, read when the work touches their topic:
 | `docs/process/git.md` | adding an item, using a grooming branch, merging or resolving a conflict |
 | `docs/process/release.md` | closing a version |
 
-- Agents read and change `backlog/` **only** through the CLI (`python3 .agents/tools/backlog.py`, written `backlog` here and in the skills; Python 3.10+) and never read, search or edit its files directly. The only exception is resolving a merge conflict (`docs/process/git.md` §3).
+- Agents read and change `backlog/` **only** through the CLI (`python3 .agents/tools/backlog.py`, written `backlog` here and in the skills; Python 3.10+) and never read, search or edit its files directly; `backlog --help` gives the syntax of every command. The only exception is resolving a merge conflict (`docs/process/git.md` §3).
 - Requirements and design are split into small files so that agents load only what a task needs: `backlog docs` lists them, `backlog docs --for <ID>` lists the files an item references, and an agent reads those files, never whole folders.
 - A requirement change is recorded first in `docs/requirements/`, then in `backlog/` and, if needed, in the design. Design choices are recorded together with the item that introduces them.
 - Adopting a new version of the template (process, skills, tools) is a `task/` item that references the process sections it adopts; it needs no requirement, because the process is not part of the product. The adopted version is the `Process version` of this file. When pi or Claude Code starts, `backlog template-check` compares it with the latest release of the `Template` above and shows a notice if the project is behind; the notice never blocks work.
