@@ -4,7 +4,7 @@
 
 ## 0. Process
 
-This project follows the shared process in [`docs/PROCESS.md`](docs/PROCESS.md). Read it before doing any work; it says which files of `docs/process/` to read for each topic.
+This project follows the shared process in [`docs/PROCESS.md`](docs/PROCESS.md); it says which files of `docs/process/` to read for each topic. Claude Code already has it in context through `CLAUDE.md` and does not read it again; other agents read it before doing any work.
 
 This file contains only project-specific rules. Where it conflicts with `docs/PROCESS.md`, the process wins unless the deviation is listed in [Process overrides](#8-process-overrides).
 
