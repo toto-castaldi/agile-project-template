@@ -62,6 +62,8 @@ DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 SLUG = r"[a-z0-9]+(?:-[a-z0-9]+)*"
 
 SECTION_LIMIT = 10
+RECENT_LIMIT = 3
+CLOSED_TEXT_LIMIT = 300
 NOTES_LIMIT = 5
 TEXT_LIMIT = 80
 DEFAULT_LIST_LIMIT = 30
@@ -787,7 +789,9 @@ def cmd_status(store: Store, args) -> int:
     print_section("In progress", data["in_progress"], lambda i: f"{summary_line(i)} [{i.get('branch')}]")
     print_section("Blocked", data["blocked"], lambda i: f"{summary_line(i)} — {shorten(i.get('blocked_by', ''))}")
     print_section("Ready", data["ready"], summary_line)
-    print_section("Recently completed", data["completed"], lambda i: f"{i.get('closed_at')} {summary_line(i)}")
+    print_section(
+        "Recently completed", data["completed"], lambda i: f"{i.get('closed_at')} {summary_line(i)}", RECENT_LIMIT,
+    )
     print_section(
         "Closed versions", data["closed_versions"],
         lambda v: f"{v['id']} closed {v.get('closed_at')}, tag {v['id']}",
@@ -843,23 +847,36 @@ ITEM_LABELS = (
 )
 
 
-def item_lines(item: dict) -> list[str]:
+LONG_FIELDS = {"description", "found_in", "steps_to_reproduce", "expected", "actual"}
+
+
+def item_lines(item: dict, short: bool = False) -> list[str]:
+    """The fields of an item; short shortens the long texts and counts the lists (closed items in show)."""
+    def text(value: str) -> str:
+        return shorten(value, CLOSED_TEXT_LIMIT) if short else value
+
     lines = []
     for label, field in ITEM_LABELS:
         value = item.get(field)
         if field == "dependencies" and not value:
             value = "none"
         if value not in (None, "", []):
-            lines.append(f"- **{label}:** {', '.join(value) if isinstance(value, list) else value}")
-    lines.append("- **Acceptance criteria:**")
-    lines.extend(f"  - {criterion}" for criterion in item.get("acceptance_criteria", []))
-    if item.get("remarks"):
-        lines.append("- **Remarks:**")
-        lines.extend(f"  - {remark}" for remark in item["remarks"])
+            value = ", ".join(value) if isinstance(value, list) else value
+            lines.append(f"- **{label}:** {text(value) if field in LONG_FIELDS else value}")
+    criteria, remarks = item.get("acceptance_criteria", []), item.get("remarks", [])
+    if short:
+        lists = [f"{len(criteria)} acceptance criteria"] + ([f"{len(remarks)} remarks"] if remarks else [])
+        lines.append(f"- **Not shown:** {', '.join(lists)} (show --full)")
+    else:
+        lines.append("- **Acceptance criteria:**")
+        lines.extend(f"  - {criterion}" for criterion in criteria)
+        if remarks:
+            lines.append("- **Remarks:**")
+            lines.extend(f"  - {remark}" for remark in remarks)
     if item.get("blocked_by"):
         lines.append(f"- **Blocked by:** {item['blocked_by']}")
     if item.get("outcome"):
-        lines.append(f"- **Outcome:** {item['outcome']} ({item.get('closed_at')})")
+        lines.append(f"- **Outcome:** {text(item['outcome'])} ({item.get('closed_at')})")
     return lines
 
 
@@ -872,7 +889,7 @@ def cmd_show(store: Store, args) -> int:
         print(json.dumps(item, ensure_ascii=False, indent=2))
         return 0
     print(f"{item['id']} — {item.get('title')}")
-    print("\n".join(item_lines(item)))
+    print("\n".join(item_lines(item, short=item.get("status") in ("Done", "Dropped") and not args.full)))
     origin = store.branch_sources.get(item["id"])
     if origin:
         print(f"- **From branch:** {origin['source']}")
@@ -2152,8 +2169,9 @@ def build_parser() -> argparse.ArgumentParser:
     listing.add_argument("--limit", type=int, default=DEFAULT_LIST_LIMIT, help="0 means no limit")
     ready = reading(commands, "ready", cmd_ready, "Todo items of open versions with all dependencies Done")
     ready.add_argument("--limit", type=int, default=SECTION_LIMIT, help="0 means no limit")
-    show = reading(commands, "show", cmd_show, "one item in full")
+    show = reading(commands, "show", cmd_show, "one item; Done and Dropped ones in short unless --full")
     show.add_argument("id")
+    show.add_argument("--full", action="store_true", help="every field in full, also for Done and Dropped items")
     reading(commands, "export", cmd_export, "whole backlog on stdout, never committed")
     reading(commands, "check", cmd_check, "validate the store and the references to docs/", branches=False)
     docs = reading(commands, "docs", cmd_docs, "list requirements and design topics of docs/", branches=False)
