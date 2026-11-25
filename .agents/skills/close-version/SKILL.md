@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Close a version
 
-Rules: `docs/process/release.md` and `docs/process/backlog.md` §1; read them first. `backlog` is `python3 .agents/tools/backlog.py`. Run only because the user explicitly asked. The user's arguments, if any, name the version; otherwise use the open version in `backlog status`.
+Rules: `docs/process/release.md` §1 and `docs/process/backlog.md` §1; read them first. `backlog` is `python3 .agents/tools/backlog.py`. Run only because the user explicitly asked. The user's arguments, if any, name the version; otherwise use the open version in `backlog status`.
 
 ## 1. Checks
 

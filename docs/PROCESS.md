@@ -41,12 +41,11 @@ Detailed rules, read when the work touches their topic:
 | `docs/process/backlog.md` | changing versions, epics or item fields, or reading the project status in detail |
 | `docs/process/docs.md` | writing or changing requirements, design, ADRs or spike reports |
 | `docs/process/git.md` | adding an item, using a grooming branch, merging or resolving a conflict |
-| `docs/process/release.md` | closing a version |
+| `docs/process/release.md` | closing a version or adopting a new template version |
 
 - Agents read and change `backlog/` **only** through the CLI (`python3 .agents/tools/backlog.py`, written `backlog` here and in the skills; Python 3.10+) and never read, search or edit its files directly; `backlog --help` gives the syntax of every command. The only exception is resolving a merge conflict (`docs/process/git.md` §3).
-- Requirements and design are split into small files so that agents load only what a task needs: `backlog docs` lists them, `backlog docs --for <ID>` lists the files an item references, and an agent reads those files, never whole folders.
+- Requirements and design are one small file each, listed by `backlog docs`; agents read the files they need, never whole folders (§7).
 - A requirement change is recorded first in `docs/requirements/`, then in `backlog/` and, if needed, in the design. Design choices are recorded together with the item that introduces them.
-- Adopting a new version of the template (process, skills, tools) is a `task/` item that references the process sections it adopts; it needs no requirement, because the process is not part of the product. The adopted version is the `Process version` of this file. When pi or Claude Code starts, `backlog template-check` compares it with the latest release of the `Template` above and shows a notice if the project is behind; the notice never blocks work.
 
 ## 4. Backlog model
 
@@ -117,18 +116,4 @@ If a criterion cannot be met, the item is not `Done`: keep working, mark it `Blo
 4. If a request is ambiguous, conflicts with documents or changes the scope of the version, ask before acting.
 5. Report outcomes faithfully: failing tests, skipped steps and unverified behavior are stated explicitly.
 
-### Skills
-
-Procedures in `.agents/skills/`. The rules apply even when work is requested in natural language.
-
-| Skill | Procedure |
-| --- | --- |
-| `kickoff` | Initialize a new project (item `TEC-001`) |
-| `add-item` | Add a requirement and/or backlog item |
-| `start-task` | Start an item: branch and state |
-| `finish-task` | Verify the Definition of Done and complete an item in its branch |
-| `merge-task` | Merge a completed item into `main` (explicit request only) |
-| `close-version` | Close a version (explicit request only) |
-| `orchestrate` | Run items in parallel through worker agents (explicit request only, `docs/PROCESS-PARALLEL.md` §2) |
-
-Other agent tooling, such as read-only viewers, never changes these rules.
+The procedures are the skills in `.agents/skills/`; their rules apply even when work is requested in natural language. Other agent tooling, such as read-only viewers, never changes these rules.

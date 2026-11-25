@@ -2054,7 +2054,7 @@ def template_check(root: Path) -> dict:
     report["message"] = (
         f"Template update available: process version {report['latest']} ({level}, {upgrade}); "
         f"this project uses {report['current']}. Release notes: {releases}. "
-        f"Adopt it in a task/ item ({PROCESS_FILE} §3)."
+        "Adopt it in a task/ item (docs/process/release.md §2)."
     )
     return report
 

@@ -1,6 +1,6 @@
 # Process: release
 
-Detailed rules of version closing, read before closing a version (`docs/PROCESS.md` §3). They are project-agnostic and must stay identical across projects.
+Detailed rules of version closing and template adoption, read before doing them (`docs/PROCESS.md` §3). They are project-agnostic and must stay identical across projects.
 
 ## 1. Closing a version
 
@@ -9,3 +9,8 @@ Detailed rules of version closing, read before closing a version (`docs/PROCESS.
 - Closing also compacts requirements and design (`docs/process/docs.md` §3): the scope and acceptance of the closed version are removed and the files changed during the version are condensed to the current state.
 
 The procedure is in the `close-version` skill.
+
+## 2. Adopting a new template version
+
+- Adopting a new version of the template (process, skills, tools) is a `task/` item that references the process sections it adopts; it needs no requirement, because the process is not part of the product.
+- The adopted version is the `Process version` at the top of `docs/PROCESS.md`. When pi or Claude Code starts, `backlog template-check` compares it with the latest release of the `Template` named there and shows a notice if the project is behind; the notice never blocks work.
