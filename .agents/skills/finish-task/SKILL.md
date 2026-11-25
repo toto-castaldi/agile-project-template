@@ -24,7 +24,7 @@ If anything is not satisfied, the item is **not** `Done`: report what is missing
 
 The date in `CHANGELOG.md`, if any, is today's date from `date +%F` (`docs/PROCESS.md` §4.2).
 
-1. `CHANGELOG.md`: for user-visible changes, add a line under `[Unreleased]` in the right subsection (`Added`, `Changed`, `Fixed`, `Removed`), in the project language, ending with the item ID.
+1. `CHANGELOG.md`: for user-visible changes, add one line under `[Unreleased]` in the right subsection (`Added`, `Changed`, `Fixed`, `Removed`): the change as the user sees it, in the project language, about 120 characters at most, ending with the item ID. Details belong in the outcome, not here. Do not print the whole file: find the subsection with `grep -n '^##' CHANGELOG.md` and read or edit only the lines around it.
 2. `backlog done <ID> --outcome "<what was delivered and verified>"`: it sets the state and the closing date.
 3. `backlog check`: fix and report any inconsistency.
 
