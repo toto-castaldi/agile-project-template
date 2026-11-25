@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Rules: `docs/process/git.md` §3, `docs/PROCESS-PARALLEL.md` and `AGENTS.md` §10. `backlog` is `python3 .agents/tools/backlog.py`. Run only because the user explicitly asked. You are the **orchestrator**: you stay in the main clone on `main` and never implement items yourself. The user's arguments, if any, name the items to launch.
 
-This file holds the steps common to every mode. How workers are started, followed, sent messages and ended depends on the mode chosen in §1 and is in one file per mode, beside this one: `.agents/skills/orchestrate/herdr.md`, `claude-code.md` or `manual.md`. Read only the file of the chosen mode; the steps below say which of its sections to apply.
+This file holds the steps common to every mode. How workers are started, followed, sent messages and ended depends on the mode chosen in §1 and is in one file per mode, beside this one: `.agents/skills/orchestrate/herdr.md`, `claude-code.md` or `manual.md`. Read only the file of the mode chosen in §1 step 5; the steps below say which of its sections to apply.
 
 ## 1. Checks
 
@@ -16,13 +16,20 @@ This file holds the steps common to every mode. How workers are started, followe
 2. The current branch is `main`, the working tree is clean and `git pull --ff-only` succeeds. If not, stop and ask the user to resolve it; do not switch branches, stash or discard changes.
 3. If `AGENTS.md` still shows "Template not initialized", stop: only `kickoff` can run.
 4. Read the settings (defaults in brackets): `Workspace root` [`../<repo-name>-work`, relative to this clone], `Worker agent command` [`pi --approve`].
-5. Mode, first match wins:
-   - **Herdr mode** if `command -v hc` succeeds and `hc get "$HC_TERMINAL_ID"` works (you run inside an hc terminal). Each worker gets its own tab;
-   - **Claude Code mode** if `CLAUDECODE` is `1` in your environment (you run inside Claude Code) and `command -v claude` succeeds. Workers are headless Claude Code sessions (`claude -p`), one turn at a time, run as background commands;
-   - otherwise **manual mode**.
+5. Mode: run this command before reading any mode file; it prints `herdr`, `claude-code` or `manual` (first match wins):
+
+   ```bash
+   if command -v hc >/dev/null && hc get "$HC_TERMINAL_ID" >/dev/null 2>&1; then echo herdr
+   elif [ "$CLAUDECODE" = 1 ] && command -v claude >/dev/null; then echo claude-code
+   else echo manual; fi
+   ```
+
+   - **Herdr mode**: you run inside an hc terminal. Each worker gets its own tab;
+   - **Claude Code mode**: you run inside Claude Code, without Herdr. Workers are headless Claude Code sessions (`claude -p`), one turn at a time, run as background commands;
+   - **manual mode**: the user starts and follows the workers.
 
    Worker command: if you run inside Claude Code (`CLAUDECODE` is `1`), workers are Claude Code sessions started with `--dangerously-skip-permissions` (in Herdr and manual mode `claude --dangerously-skip-permissions`, in Claude Code mode as in its mode file) and `Worker agent command` is not used; otherwise it is `Worker agent command`. Tell the user which mode and worker command are used and, for Claude Code workers, that with `--dangerously-skip-permissions` they run every command in their clone without asking (in Herdr mode you also confirm their folder trust dialog for the clones you create, `herdr.md` **Start**).
-6. Read the file of the chosen mode.
+6. Read only `.agents/skills/orchestrate/<mode>.md`, with the mode printed in step 5, never the other mode files.
 
 ## 2. Show the situation
 
