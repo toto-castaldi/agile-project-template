@@ -35,3 +35,14 @@ The status is computed from `backlog/` and never stored: `backlog status` gives 
 Notes (`backlog notes`) are at most a few lines of cross-cutting information. Per-item details belong in the item's `outcome`.
 
 `backlog check` validates the store.
+
+## 5. Item branches across clones
+
+`--branches` (on `status`, `list`, `ready`, `show` and `export`) is the cross-clone view of shared claims (`docs/PROCESS-PARALLEL.md` §1): it runs `git fetch --prune origin` (10 s timeout; `--no-fetch` skips it) and shows each item as it is on its item branch. Without the option, the backlog reflects only the current checkout. The rules:
+
+- item branches are the local and remote-tracking branches named `<prefix><ID>-…` (`docs/PROCESS.md` §5.1) that are not merged into local `main` or into a remote's default branch;
+- a local branch wins over the remote-tracking branch with the same name;
+- on an item branch, its own item keeps the working-tree copy;
+- with several branches for one ID, the one with the most recent commit wins; `show` lists it with the others, `export --json` gives them under `branches`;
+- items that exist only in a branch are not shown;
+- a failed fetch is only a warning: the last fetched refs are used.

@@ -640,7 +640,7 @@ def item_branches(root: Path, remotes: list[str]) -> dict[str, list[str]]:
 def overlay_branches(store: Store, fetch: bool = True) -> str:
     """Replace each item with its copy on its unmerged item branch; return the fetch outcome.
 
-    Rules in docs/PROCESS-PARALLEL.md §1. Items that exist only in a branch are not added.
+    Rules in docs/process/backlog.md §5. Items that exist only in a branch are not added.
     The source branch of each replaced item, and any other branch that carries it, are kept
     in store.branch_sources, the remotes in store.remotes. The outcome is "done", "failed",
     "skipped" (not asked or no remote) or "none" (not a git repository).

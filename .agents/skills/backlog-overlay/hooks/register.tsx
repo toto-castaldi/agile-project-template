@@ -21,7 +21,7 @@
  * dependency of the item is not Done (the rule of `backlog ready` and `start`).
  *
  * Item branches: states are resolved by the backlog CLI
- * (`export --json --branches`, rules in docs/PROCESS-PARALLEL.md §1), exactly as
+ * (`export --json --branches`, rules in docs/process/backlog.md §5), exactly as
  * in the pi overlay (.pi/extensions/backlog/). The pane shows the current
  * directory at once, then the states from the local refs and, when the
  * repository has a remote, the states after `git fetch --prune`.
