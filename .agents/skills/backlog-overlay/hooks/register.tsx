@@ -114,6 +114,7 @@ function toItem(record: BacklogRecord, store: ExportedStore): BacklogItem {
   if (strings(record.remarks).length > 0) fields.push({ label: 'Remarks', list: strings(record.remarks) })
   if (record.blocked_by) fields.push({ label: 'Blocked by', value: text(record.blocked_by) })
   if (record.outcome) fields.push({ label: 'Outcome', value: `${text(record.outcome)} (${text(record.closed_at)})` })
+  if (record.changelog) fields.push({ label: 'Changelog', value: text(record.changelog) })
 
   const id = text(record.id)
   const versionId = text(record.version)

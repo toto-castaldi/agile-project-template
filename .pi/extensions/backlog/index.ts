@@ -187,6 +187,7 @@ function toBacklogItem(record: BacklogRecord, lookup: Lookup, done: ReadonlySet<
 	if (strings(record.remarks).length > 0) body.push("- **Remarks:**", ...strings(record.remarks).map((r) => `  - ${r}`));
 	if (record.blocked_by) body.push(`- **Blocked by:** ${String(record.blocked_by)}`);
 	if (record.outcome) body.push(`- **Outcome:** ${String(record.outcome)} (${String(record.closed_at)})`);
+	if (record.changelog) body.push(`- **Changelog:** ${String(record.changelog)}`);
 
 	const versionId = record.version ? String(record.version) : undefined;
 	const epicId = record.epic ? String(record.epic) : undefined;

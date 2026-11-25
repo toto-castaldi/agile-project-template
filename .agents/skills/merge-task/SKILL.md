@@ -28,7 +28,6 @@ For a grooming branch `backlog/<slug>`, use `merge(<ID>): <short description>` w
 Conflicts:
 
 - In `backlog/`, keep both sides' changes in the record (`docs/process/git.md` §3), then run `backlog check` before committing the merge.
-- In `CHANGELOG.md`, keep all lines from both sides under `[Unreleased]`.
 - Change nothing beyond the conflict resolution.
 - For code conflicts, resolve them only if the resolution is obvious; otherwise abort the merge (`git merge --abort`) and ask the user.
 

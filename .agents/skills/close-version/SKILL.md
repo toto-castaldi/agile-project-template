@@ -18,14 +18,12 @@ Rules: `docs/process/release.md` §1 and `docs/process/backlog.md` §1; read the
 
 ## 2. Release branch
 
-The date in `CHANGELOG.md` is today's date from `date +%F` (`docs/PROCESS.md` §4.2).
-
 ```bash
 git switch -c release/vX.Y.Z
 ```
 
-1. `CHANGELOG.md`: rename `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD`, remove empty subsections, add a new empty `[Unreleased]` section on top.
-2. `backlog close-version vX.Y.Z`. Ask the user whether to open the next version now: if yes, `backlog version open vA.B.C` or `backlog version add vA.B.C --goal …`. Existing fully defined items may be moved with `backlog edit <ID> --version …`; do not create new items on the release branch. Promote unassigned ideas to items later on `main` using `add-item`.
+1. `backlog close-version vX.Y.Z`. Ask the user whether to open the next version now: if yes, `backlog version open vA.B.C` or `backlog version add vA.B.C --goal …`. Existing fully defined items may be moved with `backlog edit <ID> --version …`; do not create new items on the release branch. Promote unassigned ideas to items later on `main` using `add-item`.
+2. `CHANGELOG.md`: insert the output of `backlog changelog vX.Y.Z` (the section `[X.Y.Z] - <closing date>` generated from the changelog entries of the items) right below the `## [Unreleased]` heading, which stays empty. Lines still under `[Unreleased]` (written by hand before the entries existed) move into the matching subsections of the new section. Read only the top of the file, up to the previous release heading (`grep -n '^## ' CHANGELOG.md`).
 3. Compact requirements and design (`docs/process/docs.md` §3):
    - `docs/requirements/README.md`: remove the scope in and out of the closed version; capabilities that remain binding are covered by their requirements. `docs/requirements/acceptance.md`: remove the criteria of the closed version.
    - The files of `docs/requirements/` and `docs/design/` changed since the previous tag (`git diff --name-only <previous tag>..HEAD -- docs/requirements docs/design`, all files for the first version): rewrite each to the current state, removing item IDs, dates, decision narratives and evidence. Do not change behavior or decisions; if the rewrite reveals a conflict, stop and report it.

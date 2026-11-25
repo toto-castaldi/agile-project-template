@@ -31,7 +31,7 @@ This file holds the rules every session needs. The detailed rules of a topic are
 | `docs/design/` | the *how*: one file per topic, optional module catalog in `modules.md` |
 | `docs/adr/`, `docs/spikes/` | decisions and research outcomes |
 | `backlog/` | canonical work state |
-| `CHANGELOG.md` | user-visible changes per released version |
+| `CHANGELOG.md` | user-visible changes per released version, generated from the items when the version closes |
 | `README.md` | presentation, setup and usage; no process rules, item states or agent instructions |
 
 Detailed rules, read when the work touches their topic:
@@ -70,7 +70,7 @@ Versions (Semantic Versioning, from `v0.1.0`; one `Open` at a time) contain item
 
 An item whose dependencies are not `Done` is not started. If the user explicitly asks to start it anyway, use `backlog start --override-dependencies`.
 
-Every state change goes through a CLI command in the same commit as the work that causes it. Dates in `backlog/` come from the CLI; dates in `CHANGELOG.md` are read with `date +%F`. Never estimate or infer a date.
+Every state change goes through a CLI command in the same commit as the work that causes it. Dates in `backlog/` and in `CHANGELOG.md` come from the CLI; any other date is read with `date +%F`. Never estimate or infer a date.
 
 ### 4.3 Priorities
 
@@ -101,7 +101,7 @@ An item is `Done` only when:
 3. new behavior is covered by tests at the cheapest level that proves it, bugs have a regression test, and integration and end-to-end suites are run separately, during the item, whenever needed to prove the criteria; they are not part of the closing gate;
 4. no secrets are in files, commits or logs;
 5. requirements, design, ADRs, configuration examples and README are updated where needed, requirements and design describing the current state (`docs/process/docs.md` §3);
-6. a line is added under `[Unreleased]` in `CHANGELOG.md` for user-visible changes;
+6. a user-visible change is recorded in the item's changelog entry (`backlog done --changelog`), not in `CHANGELOG.md`;
 7. the item is `Done` with its `outcome`, and `backlog check` passes;
 8. all the work is committed in the item's branch;
 9. the additions in `AGENTS.md` are satisfied.

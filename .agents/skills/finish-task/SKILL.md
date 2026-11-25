@@ -1,6 +1,6 @@
 ---
 name: finish-task
-description: Complete the backlog item of the current branch - verify acceptance criteria and the Definition of Done, run the quality gate, update docs, CHANGELOG and the backlog, and commit in the item branch without merging. Use when an item's implementation is finished or the user asks to close/complete an item.
+description: Complete the backlog item of the current branch - verify acceptance criteria and the Definition of Done, run the quality gate, update docs and the backlog with the changelog entry, and commit in the item branch without merging. Use when an item's implementation is finished or the user asks to close/complete an item.
 ---
 
 # Finish an item
@@ -22,11 +22,8 @@ If anything is not satisfied, the item is **not** `Done`: report what is missing
 
 ## 3. Update records
 
-The date in `CHANGELOG.md`, if any, is today's date from `date +%F` (`docs/PROCESS.md` §4.2).
-
-1. `CHANGELOG.md`: for user-visible changes, add one line under `[Unreleased]` in the right subsection (`Added`, `Changed`, `Fixed`, `Removed`): the change as the user sees it, in the project language, about 120 characters at most, ending with the item ID. Details belong in the outcome, not here. Do not print the whole file: find the subsection with `grep -n '^##' CHANGELOG.md` and read or edit only the lines around it.
-2. `backlog done <ID> --outcome "<what was delivered and verified>"`: it sets the state and the closing date.
-3. `backlog check`: fix and report any inconsistency.
+1. `backlog done <ID> --outcome "<what was delivered and verified>"`: it sets the state and the closing date. For a user-visible change add `--changelog "<Added|Changed|Fixed|Removed>: <change>"`: one line as the user sees it, in the project language, about 120 characters at most, without the item ID (the CLI adds it). Details belong in the outcome. Do not edit `CHANGELOG.md`: `close-version` generates its section from these entries.
+2. `backlog check`: fix and report any inconsistency.
 
 ## 4. Commit
 

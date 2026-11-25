@@ -39,7 +39,7 @@ ITEM_FIELDS = (
     "branch", "dependencies", "dependency_override", "requirements",
     "design_references", "description", "found_in", "steps_to_reproduce",
     "expected", "actual", "acceptance_criteria", "remarks", "blocked_by", "outcome",
-    "closed_at",
+    "changelog", "closed_at",
 )
 ITEM_REQUIRED = (
     "id", "title", "epic", "type", "priority", "status",
@@ -61,6 +61,8 @@ SCOPE_CHANGE_LINE = re.compile(r"^\*\*Scope change \((\d{4}-\d{2}-\d{2})\):\*\*\
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 SLUG = r"[a-z0-9]+(?:-[a-z0-9]+)*"
 
+CHANGELOG_SECTIONS = ("Added", "Changed", "Fixed", "Removed")
+CHANGELOG_ENTRY = re.compile(r"^(Added|Changed|Fixed|Removed): (\S.*)$")
 SECTION_LIMIT = 10
 RECENT_LIMIT = 3
 CLOSED_TEXT_LIMIT = 300
@@ -487,6 +489,12 @@ def check_status(store, iid, item, prefix, errors) -> None:
     if status != "Blocked" and item.get("blocked_by"):
         errors.append((iid, f"{status} with blocked_by"))
     check_date(iid, item, "closed_at", errors)
+    changelog = item.get("changelog")
+    if changelog not in (None, ""):
+        if not CHANGELOG_ENTRY.match(str(changelog)):
+            errors.append((iid, f"invalid changelog {changelog!r}: use '<{'|'.join(CHANGELOG_SECTIONS)}>: <text>'"))
+        if status != "Done":
+            errors.append((iid, f"{status} with changelog"))
     if status in ("Done", "Dropped"):
         if not item.get("outcome"):
             errors.append((iid, f"{status} without outcome"))
@@ -877,6 +885,8 @@ def item_lines(item: dict, short: bool = False) -> list[str]:
         lines.append(f"- **Blocked by:** {item['blocked_by']}")
     if item.get("outcome"):
         lines.append(f"- **Outcome:** {text(item['outcome'])} ({item.get('closed_at')})")
+    if item.get("changelog"):
+        lines.append(f"- **Changelog:** {item['changelog']}")
     return lines
 
 
@@ -981,6 +991,17 @@ def apply_item_arguments(item: dict, args) -> None:
         item["acceptance_criteria"] = args.criterion
     if args.remark is not None:
         item["remarks"] = args.remark
+    if getattr(args, "changelog", None) is not None:
+        if args.changelog and item.get("status") != "Done":
+            raise BacklogError(f"{item['id']} is not Done: the changelog is set with done --changelog")
+        item["changelog"] = changelog_entry(args.changelog) if args.changelog else ""
+
+
+def changelog_entry(value: str) -> str:
+    entry = " ".join(value.split())
+    if not CHANGELOG_ENTRY.match(entry):
+        raise BacklogError(f"invalid changelog {value!r}: use '<{'|'.join(CHANGELOG_SECTIONS)}>: <one line>'")
+    return entry
 
 
 def cmd_add(store: Store, args) -> int:
@@ -1071,6 +1092,8 @@ def cmd_done(store: Store, args) -> int:
     item = dict(store.item(args.id))
     require_status(item, ("In Progress",), "complete")
     item.update(status="Done", outcome=args.outcome, closed_at=today())
+    if args.changelog:
+        item["changelog"] = changelog_entry(args.changelog)
     save(store, "items", item)
     print(f"{item['id']} Done")
     return 0
@@ -1082,6 +1105,7 @@ def cmd_reopen(store: Store, args) -> int:
     require_status(item, ("Done",), "reopen")
     item["status"] = "In Progress" if item.get("branch") else "Todo"
     item.pop("outcome", None)
+    item.pop("changelog", None)
     item.pop("closed_at", None)
     save(store, "items", item)
     print(f"{item['id']} {item['status']}")
@@ -1160,6 +1184,36 @@ def cmd_epic_edit(store: Store, args) -> int:
         epic["scope"] = args.scope
     save(store, "epics", epic)
     print(args.id)
+    return 0
+
+
+def changelog_section(store: Store, version_id: str) -> str:
+    """The Keep a Changelog section of a version, from the changelog field of its Done items."""
+    version = store.versions[version_id]
+    entries = {section: [] for section in CHANGELOG_SECTIONS}
+    for item in sorted(store.items.values(), key=lambda i: item_key(i["id"])):
+        match = CHANGELOG_ENTRY.match(str(item.get("changelog") or ""))
+        if item.get("version") == version_id and item.get("status") == "Done" and match:
+            entries[match[1]].append(f"- {match[2]} ({item['id']})")
+    title = f"[{version_id[1:]}] - {version['closed_at']}" if version.get("state") == "Closed" else "[Unreleased]"
+    out = [f"## {title}"]
+    for section, lines in entries.items():
+        if lines:
+            out += ["", f"### {section}", "", *lines]
+    return "\n".join(out) + "\n"
+
+
+def cmd_changelog(store: Store, args) -> int:
+    store.require_loaded()
+    version_id = args.id
+    if version_id is None:
+        open_versions = sorted((v["id"] for v in store.open_versions()), key=version_key)
+        if not open_versions:
+            raise BacklogError("no open version: name one")
+        version_id = open_versions[0]
+    if version_id not in store.versions:
+        raise BacklogError(f"version {version_id} not found")
+    print(changelog_section(store, version_id), end="")
     return 0
 
 
@@ -2095,6 +2149,8 @@ def add_item_options(parser: argparse.ArgumentParser, creating: bool) -> None:
         help="acceptance criterion, repeatable; with edit the given list replaces the existing one",
     )
     parser.add_argument("--remark", action="append", metavar="TEXT", help="free remark, repeatable; with edit the given list replaces the existing one")
+    if not creating:
+        parser.add_argument("--changelog", metavar="ENTRY", help="of a Done item: '<Added|Changed|Fixed|Removed>: <one line>'")
 
 
 COMPACT_HELP_INTRO = (
@@ -2199,6 +2255,7 @@ def build_parser() -> argparse.ArgumentParser:
     done = writing(commands, "done", cmd_done, "In Progress to Done")
     done.add_argument("id")
     done.add_argument("--outcome", required=True)
+    done.add_argument("--changelog", metavar="ENTRY", help="user-visible change: '<Added|Changed|Fixed|Removed>: <one line>'")
     reopen = writing(commands, "reopen", cmd_reopen, "leave Done")
     reopen.add_argument("id")
     drop = writing(commands, "drop", cmd_drop, "set Dropped; the file is kept so the ID is never reused")
@@ -2245,6 +2302,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     process.add_argument("--dry-run", action="store_true", help="report the rewrites, write nothing")
 
+    changelog = writing(commands, "changelog", cmd_changelog, "the CHANGELOG section of a version from its Done items")
+    changelog.add_argument("id", nargs="?", help="default: the open version")
     close = writing(commands, "close-version", cmd_close_version, "close a version whose items are finished")
     close.add_argument("id")
 

@@ -54,7 +54,7 @@ Write in the project language, keeping structural tokens in English (`docs/PROCE
    - every functional requirement in scope must be covered by at least one item;
    - record ideas outside v0.1.0 with `backlog ideas --add`, and replace the kickoff note with `backlog notes`.
 5. `README.md` — replace the template description with a short presentation of the project (what it is, status, prerequisites and commands once they exist). No process rules.
-6. `CHANGELOG.md` — keep the structure; add under `[Unreleased]` → `Added` a line for the project documentation baseline (`TEC-001`).
+6. `CHANGELOG.md` — keep the structure; the line for the project documentation baseline is the changelog entry of `TEC-001` (`Added`, §5).
 7. `.gitignore` — add the ignores of the chosen stack, keeping the existing ones.
 8. Remove from the repository anything that only describes the template and is no longer true.
 
