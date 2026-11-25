@@ -29,6 +29,7 @@ git switch -c release/vX.Y.Z
 3. Compact requirements and design (`docs/process/docs.md` §3):
    - `docs/requirements/README.md`: remove the scope in and out of the closed version; capabilities that remain binding are covered by their requirements. `docs/requirements/acceptance.md`: remove the criteria of the closed version.
    - The files of `docs/requirements/` and `docs/design/` changed since the previous tag (`git diff --name-only <previous tag>..HEAD -- docs/requirements docs/design`, all files for the first version): rewrite each to the current state, removing item IDs, dates, decision narratives and evidence. Do not change behavior or decisions; if the rewrite reveals a conflict, stop and report it.
+   - `AGENTS.md`, if it changed since the previous tag: condense it to the rules in force, without item IDs, dates or history, moving details to `docs/design/` or `docs/requirements/`. Do not change a rule without the user's agreement.
    - If the next version is opened, set the target version of the two `README.md` files and write its scope and acceptance as agreed with the user.
    - Remove `Withdrawn` requirements whose ID no open item references only if the user agrees; the ID is never reused.
 4. `backlog check`.

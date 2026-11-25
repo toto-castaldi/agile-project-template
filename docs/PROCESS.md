@@ -25,7 +25,7 @@ This file holds the rules every session needs. The detailed rules of a topic are
 
 | File | Owner of |
 | --- | --- |
-| `AGENTS.md` | project-specific rules: stack, architecture, domain, quality gate, language |
+| `AGENTS.md` | project-specific rules: stack, architecture, domain, quality gate, language; short, since it is loaded at every session: details go to `docs/design/` and `docs/requirements/` |
 | `docs/PROCESS.md`, `docs/process/`, `docs/PROCESS-PARALLEL.md` | workflow rules |
 | `docs/requirements/` | the *what*: one file per requirement |
 | `docs/design/` | the *how*: one file per topic, optional module catalog in `modules.md` |
