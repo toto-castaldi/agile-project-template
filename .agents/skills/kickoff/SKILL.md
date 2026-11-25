@@ -1,6 +1,6 @@
 ---
 name: kickoff
-description: Initialize a project created from agile-project-template by interviewing the user and filling AGENTS.md, requirements, technical design, backlog and README (backlog item TEC-001). Use when the project still shows the "Template not initialized" notice or the user asks to kick off / start a new project.
+description: Kick off a project created from agile-project-template (item TEC-001) by interviewing the user. Use only while AGENTS.md shows the "Template not initialized" notice.
 ---
 
 # Kickoff (TEC-001)
