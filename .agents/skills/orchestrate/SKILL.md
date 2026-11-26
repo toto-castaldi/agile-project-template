@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Run several backlog items in parallel - show workers and parallelizable ready items, launch one worker agent per item in its own clone (it claims the item, plans and implements, waiting for the user's go only on open questions), relay the go, follow reports, propose merges and clean up merged clones. Run only on explicit user request, with Parallel work on.
+description: Run several backlog items in parallel - show workers and parallelizable ready items, launch one worker agent per item in its own clone (it claims the item, plans and implements, waiting for the user's go only on open questions), relay the go, follow reports, merge on request and remove each merged clone right after its merge. Run only on explicit user request, with Parallel work on.
 disable-model-invocation: true
 ---
 
@@ -40,7 +40,7 @@ Run `git fetch --prune origin`, then report four lists:
 3. **Waiting for a merge**: workers whose item is `Done` on its branch.
 4. **Ready to launch**: the items of `backlog ready --limit 0` on `main` that have no local or remote branch (`git branch -a --list '*/<ID>-*'`), in that order. Point out pairs likely to touch the same files or module.
 
-Ask the user what to do: launch some ready items (which, and how many: there is no fixed limit), give the go to waiting workers, merge a finished item, release a claimed item, clean up, or wait for reports.
+Ask the user what to do: launch some ready items (which, and how many: there is no fixed limit), give the go to waiting workers, merge a finished item, release a claimed item, clean up merged clones left behind, or wait for reports.
 
 ## 3. Launch workers
 
@@ -88,13 +88,13 @@ The user may also give the go, or change the plan, directly in the worker (mode 
 
 ## 6. Merge
 
-Merge only on explicit user request, one item at a time, in this clone, following the `merge-task` procedure for the item branch (it fetches the branch from `origin`). A conflict in `backlog/` is resolved as in `docs/process/git.md` §3. Any other conflict that is not obvious: abort and report. If the item's records on the branch are wrong (for example a date), do not fix them in the merge: with the user's agreement, ask the worker to fix them with a commit on its branch (mode file, **Send**), on its report (§4) check the push, then merge. Then propose the next merge, if any.
+Merge only on explicit user request, one item at a time, in this clone, following the `merge-task` procedure for the item branch (it fetches the branch from `origin`). A conflict in `backlog/` is resolved as in `docs/process/git.md` §3. Any other conflict that is not obvious: abort and report. If the item's records on the branch are wrong (for example a date), do not fix them in the merge: with the user's agreement, ask the worker to fix them with a commit on its branch (mode file, **Send**), on its report (§4) check the push, then merge. After a successful merge, clean up the item at once (§7) without asking for confirmation: the merge request covers it. Then propose the next merge, if any.
 
 ## 7. Clean up
 
-Only for an item whose branch is merged into `main` and deleted from `origin` (`git fetch --prune origin`; `git branch -r --list 'origin/*/<ID>-*'` is empty; the merge commit is on `main`):
+Run it right after each merge (§6), without asking the user, and on request for merged clones left behind. Only for an item whose branch is merged into `main` and deleted from `origin` (`git fetch --prune origin`; `git branch -r --list 'origin/*/<ID>-*'` is empty; the merge commit is on `main`):
 
-1. In the clone, check that nothing would be lost: `git -C <clone> fetch --prune origin`, then `git -C <clone> status --porcelain` is empty and `git -C <clone> log --branches --not --remotes --oneline` is empty. If either shows anything, do not remove the clone: report it to the user.
+1. In the clone, check that nothing would be lost: `git -C <clone> fetch --prune origin`, then `git -C <clone> status --porcelain` is empty and `git -C <clone> log --branches --not --remotes --oneline` is empty. If either shows anything, do not remove the clone: report it to the user and ask. This is the only case in which the clean up waits for the user.
 2. End the worker (mode file, **End**).
 3. Remove the clone folder (only the folder `<Workspace root>/<ID>` that you created).
 
